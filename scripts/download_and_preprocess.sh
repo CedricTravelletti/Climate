@@ -25,7 +25,7 @@
 
 
 # The base folder where data will be stored.
-BASE_FOLDER = "/home/cedric/PHD/Dev/Climate/Data/"
+BASE_FOLDER="/storage/homefs/ct19x463/Dev/Climate/Data"
 TOT_ENS_NUMBER=30 # Total number of different ensembles.
 
 
@@ -49,8 +49,7 @@ echo "Getting URLs".
 curl http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ensmean/ | grep -i nc | sed -n 's/.*href="\([^"]*\).*/\1/p' >> urls_ensmean.txt
 
 # Get Members URLs.
-curl http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/ | grep -i nc | sed
--n 's/.*href="\([^"]*\).*/\1/p' >> urls_ens_mem.txt
+curl http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/ | grep -i nc | sed -n 's/.*href="\([^"]*\).*/\1/p' >> urls_ens_mem.txt
 
 # Make directories and download.
 echo "Got URLs. Starting download."
@@ -83,5 +82,6 @@ echo "Done moving each ensemble member to its own directory."
 
 # Finally, run python script to add a variable describing the ensemble member
 # to each NetCDF4 file.
-cd initial_wd
+cd $initial_wd
+echo $ensemble_members_folder
 python preprocess_helper.py "$ensemble_members_folder" "$TOT_ENS_NUMBER"
