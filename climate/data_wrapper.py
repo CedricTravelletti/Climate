@@ -18,13 +18,13 @@ def match_datasets(base_dataset, dataset_tomatch):
     """
     # Define original lat-lon grid
     # Creates new columns converting coordinate degrees to radians.
-    lon_rad = np.deg2rad(dataset_members.longitude.values)
-    lat_rad = np.deg2rad(dataset_members.latitude.values)
+    lon_rad = np.deg2rad(base_dataset.longitude.values.astype(np.float32))
+    lat_rad = np.deg2rad(base_dataset.latitude.values.astype(np.float32))
     lat_grid, lon_grid = np.meshgrid(lat_rad, lon_rad, indexing='ij')
     
     # Define grid to be matched.
-    lon_tomatch = np.deg2rad(dataset_instrumental.longitude.values)
-    lat_tomatch = np.deg2rad(dataset_instrumental.latitude.values)
+    lon_tomatch = np.deg2rad(dataset_tomatch.longitude.values.astype(np.float32))
+    lat_tomatch = np.deg2rad(dataset_tomatch.latitude.values.astype(np.float32))
     lat_tomatch_grid, lon_tomatch_grid = np.meshgrid(lat_tomatch, lon_tomatch,
             indexing='ij')
     
@@ -95,11 +95,12 @@ class Dataset():
         coords: ndarray (self.n_points, 2)
 
         """
-        lons = np.deg2rad(self.dataset.longitude.values)
-        lats = np.deg2rad(self.dataset.latitude.values)
+        lons = np.deg2rad(self.dataset.longitude.values.astype(np.float32))
+        lats = np.deg2rad(self.dataset.latitude.values.astype(np.float32))
         lat_grid, lon_grid = np.meshgrid(lats, lons, indexing='ij')
 
-        points_list = np.vstack([lat_grid.ravel().T, lon_grid.ravel().T]).T
+        points_list = np.ascontiguousarray(np.vstack([lat_grid.ravel().T,
+                lon_grid.ravel().T]).T)
         return points_list
 
     @property
