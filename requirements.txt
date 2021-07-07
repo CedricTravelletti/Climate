@@ -1,0 +1,6 @@
+cython
+numpy
+pandas
+xarray
+dask
+netCDF4
