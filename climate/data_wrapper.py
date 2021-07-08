@@ -114,7 +114,7 @@ class Dataset():
     def _to_2d_array(self, array):
         return array.reshape(self.dims)
 
-    def empty_like(self):
+    def empty_like(self, times=None):
         """ Returns a dataset with the same spatial dimensions as the current
         one but without any data (does not include a time dimension).
 
@@ -127,13 +127,22 @@ class Dataset():
                 'latitude': (['latitude'], latitudes),
                 'longitude': (['longitude'], longitudes)
                 })
+        if times is not None:
+            ds_out = xr.Dataset(
+                    {
+                            'latitude': (['latitude'], latitudes),
+                            'longitude': (['longitude'], longitudes),
+                            'time': (['time'], times)
+                            
+                            })
         return ds_out
 
     def regrid_on(self, input_dataset):
         """ Regrid an input dataset on the spatial grid of the current dataset.
 
         """
-        ds_out = self.empty_like()
+        times = input_dataset.time.values
+        ds_out = self.empty_like(times)
         regridder = xe.Regridder(input_dataset, ds_out, 'bilinear')
         return regridder(input_dataset)
 
