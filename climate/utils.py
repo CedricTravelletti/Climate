@@ -2,6 +2,7 @@
 
 """
 import os
+import numpy as np
 import xarray as xr
 
 
@@ -68,13 +69,13 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
 
     # Rename.
     dataset_mean = dataset_mean.rename(
-            {'air_temperature': 'temperature_ens_mean'})
+            {'air_temperature': 'temperature'})
     dataset_members = dataset_members.rename(
-            {'air_temperature': 'temperature_ens_member'})
+            {'air_temperature': 'temperature'})
     dataset_reference = dataset_reference.rename(
-            {'tmp': 'temperature_ref'})
+            {'tmp': 'temperature'})
     dataset_instrumental = dataset_instrumental.rename(
-            {'temperature_anomaly': 'temperature_anomaly_instrumental'})
+            {'temperature_anomaly': 'temperature_anomaly'})
 
     # Convert longitudes to the standard [-180, 180] format.
     dataset_mean = dataset_mean.assign_coords(
@@ -101,13 +102,17 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
     dataset_reference = dataset_reference.interp(latitude=dataset_mean["latitude"],
         longitude=dataset_mean["longitude"])
 
+    # Cast to common dtype.
+    dataset_reference['temperature'] = dataset_reference['temperature'].astype(np.float32)
+
+    """
     # Clip datasets to common extent.
     # The reference dataset is only defined on land, hence, we can cut out
     # the sea from the other dataset to lighten the computations.
     ref = dataset_reference.temperature_ref.isel(time=100) # Select one date as baseline.
-    dataset_mean.temperature_ens_mean = dataset_mean.temperature_ens_mean.where(
+    dataset_mean['temperature_ens_mean'] = dataset_mean['temperature_ens_mean'].where(
             xr.ufuncs.logical_not(xr.ufuncs.isnan(ref)))
-    dataset_members.temperature_ens_member = dataset_mean.temperature_ens_mean.where(
+    dataset_members['temperature_ens_member'] = dataset_members['temperature_ens_member'].where(
             xr.ufuncs.logical_not(xr.ufuncs.isnan(ref)))
 
     # Merge the dataset.
@@ -116,4 +121,6 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
         coords=['latitude', 'longitude', 'time'], join="inner",
         combine_attrs='drop_conflicts')
 
-    return dataset_merged, dataset_instrumental
+    """
+
+    return dataset_mean, dataset_members, dataset_instrumental, dataset_reference
