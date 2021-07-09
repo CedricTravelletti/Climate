@@ -63,14 +63,14 @@ curl http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/ | grep -i nc | sed 
 echo "Got URLs. Starting download."
 mkdir -p "Means"
 cd "./Means/"
-cat "../urls_ensmean.txt" | parallel -j 1 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ensmean/{}"
+cat "../urls_ensmean.txt" | parallel -j 10 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ensmean/{}"
 
 cd ..
 
 mkdir -p "Members"
 cd "./Members/"
 ensemble_members_folder=`pwd` # Save directory location.
-cat "../urls_ens_mem.txt" | parallel -j 1 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/{}"
+cat "../urls_ens_mem.txt" | parallel -j 10 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/{}"
 
 echo "Download Finished. Starting postprocessing."
 
