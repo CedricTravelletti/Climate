@@ -105,6 +105,22 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
     # Cast to common dtype.
     dataset_reference['temperature'] = dataset_reference['temperature'].astype(np.float32)
 
+    # Compute anomalies with respect to the 1961-1990 mean.
+    mean_ens_mean = dataset_mean.temperature.sel(
+            time=slice('1961-01-01', '1990-12-31')).mean(dim='time')
+    mean_ens_members = dataset_members.temperature.sel(
+            time=slice('1961-01-01', '1990-12-31')).groupby('member_nr').mean(dim='time')
+    mean_reference = dataset_reference.temperature.sel(
+            time=slice('1961-01-01', '1990-12-31')).mean(dim='time')
+
+    dataset_mean['anomaly'] = dataset_mean.temperature - mean_ens_mean
+    dataset_members['anomaly'] = dataset_members.temperature - mean_ens_members
+    dataset_reference['anomaly'] = dataset_reference.temperature - mean_reference
+
+    dataset_mean['mean_temp'] = mean_ens_mean
+    dataset_members['mean_temp'] = mean_ens_members
+    dataset_reference['mean_temp'] = mean_reference
+
     """
     # Clip datasets to common extent.
     # The reference dataset is only defined on land, hence, we can cut out
