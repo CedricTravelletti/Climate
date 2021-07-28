@@ -4,6 +4,7 @@
 import os
 import numpy as np
 import xarray as xr
+from sklearn.neighbors import BallTree
 
 
 def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
@@ -75,7 +76,7 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
     dataset_reference = dataset_reference.rename(
             {'tmp': 'temperature'})
     dataset_instrumental = dataset_instrumental.rename(
-            {'temperature_anomaly': 'temperature_anomaly'})
+            {'temperature_anomaly': 'anomaly'})
 
     # Convert longitudes to the standard [-180, 180] format.
     dataset_mean = dataset_mean.assign_coords(
@@ -106,20 +107,25 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
     dataset_reference['temperature'] = dataset_reference['temperature'].astype(np.float32)
 
     # Compute anomalies with respect to the 1961-1990 mean.
-    mean_ens_mean = dataset_mean.temperature.sel(
-            time=slice('1961-01-01', '1990-12-31')).mean(dim='time')
-    mean_ens_members = dataset_members.temperature.sel(
-            time=slice('1961-01-01', '1990-12-31')).groupby('member_nr').mean(dim='time')
-    mean_reference = dataset_reference.temperature.sel(
-            time=slice('1961-01-01', '1990-12-31')).mean(dim='time')
+    # Note that anomalies are with respect to the long term mean for each given
+    # month.
+    monthly_avg_mean = dataset_mean.temperature.sel(
+            time=slice('1961-01-01', '1990-12-31')).groupby('time.month').mean(dim='time')
+    monthly_avg_members = dataset_members.temperature.sel(
+            time=slice('1961-01-01', '1990-12-31')).groupby('time.month').mean(dim='time')
+    monthly_avg_reference = dataset_reference.temperature.sel(
+            time=slice('1961-01-01', '1990-12-31')).groupby('time.month').mean(dim='time')
 
-    dataset_mean['anomaly'] = dataset_mean.temperature - mean_ens_mean
-    dataset_members['anomaly'] = dataset_members.temperature - mean_ens_members
-    dataset_reference['anomaly'] = dataset_reference.temperature - mean_reference
+    dataset_mean['anomaly'] = (dataset_mean.temperature.groupby('time.month')
+                                - monthly_avg_mean)
+    dataset_members['anomaly'] = (dataset_members.temperature.groupby('time.month')
+                                - monthly_avg_members)
+    dataset_reference['anomaly'] = (dataset_reference.temperature.groupby('time.month')
+                                    - monthly_avg_reference)
 
-    dataset_mean['mean_temp'] = mean_ens_mean
-    dataset_members['mean_temp'] = mean_ens_members
-    dataset_reference['mean_temp'] = mean_reference
+    dataset_mean['mean_temp'] = monthly_avg_mean
+    dataset_members['mean_temp'] = monthly_avg_members
+    dataset_reference['mean_temp'] = monthly_avg_reference
 
     """
     # Clip datasets to common extent.
@@ -140,3 +146,73 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
     """
 
     return dataset_mean, dataset_members, dataset_instrumental, dataset_reference
+
+
+def match_datasets(base_dataset, dataset_tomatch):
+    """" Match two datasets defined on different grid.
+
+    Given a base dataset and a dataset to be matched, find for each point in
+    the dataset to mathc the closest cell in the base dataset and return its
+    index.
+
+    Parameters
+    ----------
+    base_dataset: xarray.Dataset
+    dataset_tomatch: xarray.Dataset
+
+    """
+    # Define original lat-lon grid
+    # Creates new columns converting coordinate degrees to radians.
+    lon_rad = np.deg2rad(base_dataset.longitude.values.astype(np.float32))
+    lat_rad = np.deg2rad(base_dataset.latitude.values.astype(np.float32))
+    lat_grid, lon_grid = np.meshgrid(lat_rad, lon_rad, indexing='ij')
+    
+    # Define grid to be matched.
+    lon_tomatch = np.deg2rad(dataset_tomatch.longitude.values.astype(np.float32))
+    lat_tomatch = np.deg2rad(dataset_tomatch.latitude.values.astype(np.float32))
+    lat_tomatch_grid, lon_tomatch_grid = np.meshgrid(lat_tomatch, lon_tomatch,
+            indexing='ij')
+    
+    # Put everything in two stacked lists (format required by BallTree).
+    coarse_grid_list = np.vstack([lat_tomatch_grid.ravel().T, lon_tomatch_grid.ravel().T]).T
+    
+    ball = BallTree(np.vstack([lat_grid.ravel().T, lon_grid.ravel().T]).T, metric='haversine')
+    
+    distances, index_array_1d = ball.query(coarse_grid_list, k=1)
+    
+    # Convert back to kilometers.
+    distances_km = 6371 * distances
+
+    # Sanity check.
+    print("Maximal distance to matched point: {} km.".format(np.max(distances_km)))
+    
+    # get_neighbour_info() returns indices in the flattened lat/lon grid. Compute
+    # the 2D grid indices:
+    index_array_2d = np.hstack(np.unravel_index(index_array_1d, lon_grid.shape))
+
+    return index_array_1d, index_array_2d
+
+
+def build_base_forward(model_dataset, data_dataset):
+    """ Build the forward operator mapping a model dataset to a data dataset.
+    This builds the generic forward matrix that maps points in the model space
+    to points in the data space, considering both as static, uniform grids. 
+    When used in practice one should remove lines of the matrix that correspond
+    to NaN values in the data space.
+
+    """
+    index_array_1d, index_array_2d = match_datasets(model_dataset, data_dataset)
+
+    model_lon_dim = model_dataset.dims['longitude']
+    model_lat_dim = model_dataset.dims['latitude']
+    data_lon_dim = data_dataset.dims['longitude']
+    data_lat_dim = data_dataset.dims['latitude']
+
+    G = np.zeros((data_lon_dim * data_lat_dim, model_lon_dim * model_lat_dim),
+            np.float32)
+
+    # Set corresponding cells to 1 (ugly implementation, could be better).
+    for data_ind, model_ind in enumerate(index_array_1d):
+        G[data_ind, model_ind] = 1.0
+
+    return G
