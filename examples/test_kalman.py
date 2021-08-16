@@ -12,6 +12,11 @@ from climate.utils import build_base_forward
 from climate.kalman_filter import EnsembleKalmanFilter
 
 
+from dask.distributed import Client
+client = Client(processes=False)
+client = Client(n_workers=4, threads_per_worker=1, memory_limit='9GB')
+
+
 # Loading is done using the *load_dataset* function from the *utils* submodule.
 # The user has to specify the path to the root of the data folder (use the
 # *download_and_preprocess* script to create the folder structure).

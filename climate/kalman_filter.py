@@ -7,11 +7,6 @@ from dask.array.linalg import inv
 import dask.array as da
 
 
-from dask.distributed import Client
-client = Client(processes=False)
-client = Client(n_workers=4, threads_per_worker=1, memory_limit='9GB')
-
-
 class EnsembleKalmanFilter():
     """ Implementation of the ensemble Kalman filter.
 
