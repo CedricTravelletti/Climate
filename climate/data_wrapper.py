@@ -1,81 +1,9 @@
 import numpy as np
 import xarray as xr
-import xesmf as xe
-from sklearn.neighbors import BallTree
 
 
-def match_datasets(base_dataset, dataset_tomatch):
-    """" Match two datasets defined on different grid.
-
-    Given a base dataset and a dataset to be matched, find for each point in
-    the dataset to mathc the closest cell in the base dataset and return its
-    index.
-
-    Parameters
-    ----------
-    base_dataset: xarray.Dataset
-    dataset_tomatch: xarray.Dataset
-
-    """
-    # Define original lat-lon grid
-    # Creates new columns converting coordinate degrees to radians.
-    lon_rad = np.deg2rad(base_dataset.longitude.values.astype(np.float32))
-    lat_rad = np.deg2rad(base_dataset.latitude.values.astype(np.float32))
-    lat_grid, lon_grid = np.meshgrid(lat_rad, lon_rad, indexing='ij')
-    
-    # Define grid to be matched.
-    lon_tomatch = np.deg2rad(dataset_tomatch.longitude.values.astype(np.float32))
-    lat_tomatch = np.deg2rad(dataset_tomatch.latitude.values.astype(np.float32))
-    lat_tomatch_grid, lon_tomatch_grid = np.meshgrid(lat_tomatch, lon_tomatch,
-            indexing='ij')
-    
-    # Put everything in two stacked lists (format required by BallTree).
-    coarse_grid_list = np.vstack([lat_tomatch_grid.ravel().T, lon_tomatch_grid.ravel().T]).T
-    
-    ball = BallTree(np.vstack([lat_grid.ravel().T, lon_grid.ravel().T]).T, metric='haversine')
-    
-    distances, index_array_1d = ball.query(coarse_grid_list, k=1)
-    
-    # Convert back to kilometers.
-    distances_km = 6371 * distances
-
-    # Sanity check.
-    print("Maximal distance to matched point: {} km.".format(np.max(distances_km)))
-    
-    # get_neighbour_info() returns indices in the flattened lat/lon grid. Compute
-    # the 2D grid indices:
-    index_array_2d = np.hstack(np.unravel_index(index_array_1d, lon_grid.shape))
-
-    return index_array_1d, index_array_2d
-
-
-def build_base_forward(model_dataset, data_dataset):
-    """ Build the forward operator mapping a model dataset to a data dataset.
-    This builds the generic forward matrix that maps points in the model space
-    to points in the data space, considering both as static, uniform grids. 
-    When used in practice one should remove lines of the matrix that correspond
-    to NaN values in the data space.
-
-    """
-    index_array_1d, index_array_2d = match_datasets(model_dataset, data_dataset)
-
-    model_lon_dim = model_dataset.dims['longitude']
-    model_lat_dim = model_dataset.dims['latitude']
-    data_lon_dim = data_dataset.dims['longitude']
-    data_lat_dim = data_dataset.dims['latitude']
-
-    G = np.zeros((data_lon_dim * data_lat_dim, model_lon_dim * model_lat_dim),
-            np.float32)
-
-    # Set corresponding cells to 1 (ugly implementation, could be better).
-    for data_ind, model_ind in enumerate(index_array_1d):
-        G[data_ind, model_ind] = 1.0
-
-    return G
-
-
-class Dataset():
-    def __init__(self, dataset):
+class DatasetWrapper():
+    def __init__(self, dataset, chunk_size=1000):
         """
 
         Parameters
@@ -86,6 +14,7 @@ class Dataset():
         self.dataset = dataset
         self.dims = (dataset.dims['latitude'], dataset.dims['longitude'])
         self.n_points = self.dims[0] * self.dims[1]
+        self.chunk_size = chunk_size
 
     def _get_coords(self):
         """ Returns a list of the coordinates of all points in the dataset.
@@ -107,6 +36,14 @@ class Dataset():
     @property
     def coords(self):
         return self._get_coords()
+
+    @property
+    def anomaly(self):
+        """ Getter for the anomaly variable of the dataset.
+        This avoids having to call self.dataset.anomaly.
+
+        """
+        return self.dataset.anomaly
 
     def _to_1d_array(self, array):
         return array.ravel()
@@ -137,12 +74,48 @@ class Dataset():
                             })
         return ds_out
 
-    def regrid_on(self, input_dataset):
-        """ Regrid an input dataset on the spatial grid of the current dataset.
+    def get_window_vector(self, time_begin, time_end, indexers=None):
+        """ Given a time window, returns the stacked vector for the data in
+        that period.
+
+        Note that only the 'time', 'latitude' and 'longitude' dimensions get
+        stacked, while the remaining ones remain untouched.
+        This is useful when working with ensembles, since it allows the
+        'member_nr' dimension to remain and one can then use it to perform
+        ensemble estimation (covariance matrices for example).
+
+        Parameters
+        ----------
+        time_begin: string
+            Beginning of the window.
+            Format is like '2021-01-30'.
+        time_end: string
+            End of window.
+        indexers: dict, defaults to None
+            If specified, then gets passed to dataset.sel().
+            Can be used to do additional subsetting before windowing, e.g.
+            select a given member_nr simulation.
+
+        Returns
+        -------
+        xarray.DataArray
+            Data array with the space-time dimensions concatenated.
+            The name of the new stacked dimension is 'stacked_dim'.
 
         """
-        times = input_dataset.time.values
-        ds_out = self.empty_like(times)
-        regridder = xe.Regridder(input_dataset, ds_out, 'bilinear')
-        return regridder(input_dataset)
+        # The data is re-chunked after stacking to make sure the subsequent
+        # computations fit in memory.
+        stacked_data = self.dataset.anomaly.sel(
+                time=slice(time_begin, time_end)).stack(
+                        stacked_dim=('time', 'latitude', 'longitude')).chunk(
+                                {'stacked_dim': self.chunk_size})
+        return stacked_data
 
+    def unstack_window_vector(self, window_vector):
+        """ Given a stacked vector (as produced by get_window_vector, but in
+        numpy format), unstack it into a dataset of the original dimension.
+
+        """
+        # First copy it into a dataset of the current shape.
+        result = self.dataset.copy(data=window_vector)
+        return result.unstack('stacked_dim')

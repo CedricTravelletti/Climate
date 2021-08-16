@@ -4,3 +4,4 @@ pandas
 xarray
 dask
 netCDF4
+cartopy
