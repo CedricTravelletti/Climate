@@ -2,6 +2,7 @@ import numpy as np
 from climate.data_wrapper import DatasetWrapper
 from climate.utils import build_base_forward
 from scipy.linalg import block_diag
+import xarray as xr
 from dask.array import matmul, eye, transpose, cov
 from dask.array.linalg import inv, cholesky
 import dask.array as da
@@ -85,7 +86,33 @@ class EnsembleKalmanFilter():
         return cov_matrix
 
     def update_mean_window(self, time_begin, time_end, n_months, data_var):
-        """ 
+        """ Ensemble Kalman filter updating over an assimilation window.
+
+        Parameters
+        ----------
+        time_begin: str
+            Begin (included) of updating window. Format is '1961-12-31'.
+            Note that this does not need to be a date that is present in the dataset.
+            The datasets used here contain the 16th of every month, so valid date is 
+            '1961-01-16'.
+        time_end: str
+            End of the updating window (included). Same format as above.
+        n_months: int
+            Number of datapoints contained in the window.
+            The datasets used here contain datapoins each 16th of the month, so if 
+            begin is '1961-01-01' and end is '1961-06-28' then the number of months (datapoints) will be 6.
+            Will be automated in the future.
+        data_var: float
+            Variance of the observational noise.
+
+        Returns
+        -------
+        mean_updated: xarray.Dataset
+            Dataset with updated mean. Note that the data format is lazy. One should call 
+            the corresponding .compute() method to trigger computing.
+        members_updated: xarray.Dataset
+            Dataset with updated members. Note that the data format is lazy. One should call 
+            the corresponding .compute() method to trigger computing.
 
         """
         # First get the mean vector and data vector (stacked for the window).
@@ -126,12 +153,21 @@ class EnsembleKalmanFilter():
                 matmul(kalman_gain, prior_misfit)
                 )
 
+        # Unstack the vector to go back to the grid format.
+        mean_updated = vector_mean_updated.unstack('stacked_dim')
+
         # Loop over members.
+        members_updated = []
         for i in self.dataset_members.dataset.member_nr:
             vector_member = self.dataset_members.get_window_vector(time_begin, time_end, indexers={'member_nr': i})
             vector_member_updated = (
                     vector_member +
                     matmul(kalman_gain_tilde, matmul(G, vector_member))
                     )
+            member_updated = vector_member_updated.unstack('stacked_dim')
+            members_updated.append(member_updated)
 
-        return vector_mean_updated.compute(), vector_member_updated.compute()
+        # Put into single dataset.
+        members_updated = xr.concat(members_updated, dim='member_nr')
+
+        return mean_updated, members_updated
