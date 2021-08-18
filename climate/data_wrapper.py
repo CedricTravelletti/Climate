@@ -105,7 +105,7 @@ class DatasetWrapper():
         """
         # The data is re-chunked after stacking to make sure the subsequent
         # computations fit in memory.
-        stacked_data = self.dataset.anomaly.sel(
+        stacked_data = self.dataset.anomaly.sel(indexers).sel(
                 time=slice(time_begin, time_end)).stack(
                         stacked_dim=('time', 'latitude', 'longitude')).chunk(
                                 {'stacked_dim': self.chunk_size})
