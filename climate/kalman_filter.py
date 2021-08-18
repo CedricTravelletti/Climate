@@ -3,7 +3,7 @@ from climate.data_wrapper import DatasetWrapper
 from climate.utils import build_base_forward
 from scipy.linalg import block_diag
 from dask.array import matmul, eye, transpose, cov
-from dask.array.linalg import inv
+from dask.array.linalg import inv, cholesky
 import dask.array as da
 
 
@@ -100,21 +100,38 @@ class EnsembleKalmanFilter():
         G = da.from_array(G)
         cov = self.get_ensemble_covariance(time_begin, time_end)
 
-        data_cov = data_var * eye(vector_data.shape[0], chunks=self.chunk_size)
+        data_cov = data_var * eye(vector_data.shape[0], chunks=self.chunk_size).rechunk()
 
         # Define the graph for computing the updated mean vector.
         to_invert = (matmul(
                         G,
                         matmul(cov, transpose(G)))
                     + data_cov).rechunk()
+        sqrt = cholesky(to_invert, lower=True)
+
         kalman_gain = matmul(
                 matmul(cov, transpose(G)),
                 inv(to_invert))
+        kalman_gain_tilde = matmul(
+                matmul(cov, transpose(G)),
+                matmul(
+                    transpose(inv(sqrt)),
+                    inv(sqrt + cholesky(data_cov, lower=True))
+                    )
+                )
 
         prior_misfit = vector_data - matmul(G, vector_mean)
-
         vector_mean_updated = (
                 vector_mean +
                 matmul(kalman_gain, prior_misfit)
                 )
-        return vector_mean_updated.compute()
+
+        # Loop over members.
+        for i in self.dataset_members.dataset.member_nr:
+            vector_member = self.dataset_members.get_window_vector(time_begin, time_end, indexers={'member_nr': i})
+            vector_member_updated = (
+                    vector_member +
+                    matmul(kalman_gain_tilde, matmul(G, vector_member))
+                    )
+
+        return vector_mean_updated.compute(), vector_member_updated.compute()

@@ -2,6 +2,7 @@
 
 """
 import os
+import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 import cartopy.crs as ccrs
@@ -48,18 +49,24 @@ def main():
     # Test Kalman filter.
     my_filter = EnsembleKalmanFilter(subset_mean, subset_members,
             subset_instrumental)
-    xa = my_filter.update_mean_window('1961-01-01', '1961-06-28', 6, data_var=0.9)
+    mean_updated, member_updated = my_filter.update_mean_window('1961-01-01', '1961-06-28', 6, data_var=0.9)
     
     # Plot updated mean vs non updated vs reference.
-    updated = xa.unstack('stacked_dim').sel(time='1961-01-16')
+    updated = mean_updated.unstack('stacked_dim').sel(time='1961-01-16')
+    updated_member = member_updated.unstack('stacked_dim').sel(time='1961-01-16')
     non_updated = subset_mean.anomaly.sel(time='1961-01-16')
+    non_updated_member = subset_members.sel(member_nr=9).anomaly.sel(time='1961-01-16')
     reference = subset_reference.anomaly.sel(time='1961-01-16')
     data = subset_instrumental.anomaly.sel(time='1961-01-16')
     
     # Clip datasets to common extent.
     updated = updated.where(
                 xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
+    updated_member = updated_member.where(
+                xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
     non_updated = non_updated.where(
+                xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
+    non_updated_member = non_updated_member.where(
                 xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
     
     
@@ -69,7 +76,7 @@ def main():
     f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 6),
             subplot_kw={'projection': ccrs.PlateCarree()})
     
-    non_updated.plot(ax=ax1,
+    non_updated_member.plot(ax=ax1,
             cbar_kwargs={'ticks': levels, 'spacing':
             'proportional', 'label': 'anomaly (non updated)'},
             vmin=-5, vmax=5)
@@ -79,9 +86,14 @@ def main():
     reference.plot(ax=ax3, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
             'label': 'anomaly (reference)'},
             vmin=-5, vmax=5)
+    updated_member.plot(ax=ax4, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+            'label': 'anomaly (updated)'},
+            vmin=-5, vmax=5)
+    """
     data.plot(ax=ax4, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
             'label': 'anomaly (instrumental)'},
             vmin=-5, vmax=5)
+    """
     ax1.coastlines()
     ax2.coastlines()
     ax3.coastlines()
