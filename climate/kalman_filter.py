@@ -64,6 +64,9 @@ class EnsembleKalmanFilter():
         # diagonal matrix.
         monthly_data = self.dataset_instrumental._to_1d_array(
                     dataset_instrumental.isel(time=0).values)
+
+        # We use the base G which is basically a translation between the 
+        # two grids and only activate it at places where we have data.
         G_nonan = self.G_base[np.logical_not(np.isnan(monthly_data)), :]
 
         for i in range(1, n_months):
