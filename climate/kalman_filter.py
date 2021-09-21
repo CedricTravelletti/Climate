@@ -6,6 +6,7 @@ import xarray as xr
 from dask.array import matmul, eye, transpose, cov
 from dask.array.linalg import inv, cholesky
 import dask.array as da
+import dask
 
 
 # Set default chunk size so that automatic rechunking works.
