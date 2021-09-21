@@ -107,8 +107,8 @@ class DatasetWrapper():
         # computations fit in memory.
         stacked_data = self.dataset.anomaly.sel(indexers).sel(
                 time=slice(time_begin, time_end)).stack(
-                        stacked_dim=('time', 'latitude', 'longitude')).chunk(
-                                {'stacked_dim': self.chunk_size})
+                        stacked_dim=('time', 'latitude', 'longitude'))
+                #.chunk({'stacked_dim': self.chunk_size})
         return stacked_data
 
     def unstack_window_vector(self, window_vector):
