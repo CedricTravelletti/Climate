@@ -132,6 +132,9 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
     dataset_members['mean_temp'] = monthly_avg_members
     dataset_reference['mean_temp'] = monthly_avg_reference
 
+    # Rechunk the anomaly to have a big enough chunk size.
+    dataset_members['anomaly'] = dataset_members.anomaly.chunk({'time': 480})
+
     """
     # Clip datasets to common extent.
     # The reference dataset is only defined on land, hence, we can cut out
