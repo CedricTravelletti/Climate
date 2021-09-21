@@ -13,11 +13,20 @@ from climate.utils import build_base_forward
 from climate.kalman_filter import EnsembleKalmanFilter
 
 
+import time
+
+
 def main():
-    from dask_cuda import LocalCUDACluster
+    from dask_jobqueue import SLURMCluster
     from dask.distributed import Client
-    cluster = LocalCUDACluster()
+    cluster = SLURMCluster(
+        cores=4,
+        memory="12 GB"
+    )
     client = Client(cluster)
+
+    # Manually define the size of the cluster.
+    cluster.scale(20)
     
     # Loading is done using the *load_dataset* function from the *utils* submodule.
     # The user has to specify the path to the root of the data folder (use the
@@ -34,74 +43,125 @@ def main():
     # mean, the instrumental data and the reference dataset.
     dataset_mean, dataset_members, dataset_instrumental, dataset_reference = load_dataset(
             base_folder, TOT_ENSEMBLES_NUMBER)
+    print("Loading done.")
+
+    # Load in distributed memory.
+    dataset_mean.persist()
+    dataset_members.persist()
+    dataset_instrumental.persist()
+    dataset_reference.persist()
+    print("Loading dataset in distributed memory done.")
     
     # Select a sub-region (Europe) to make computations easier.
     # Note that there is a bug in xarray that forces the selection of a subset of
     # the coordinates to happen in a sorted manner.
     # Hence for the latitudes (that go in decreasing order) we have to invert the
     # range.
-    subset_members = dataset_members.sel(longitude=slice(0, 115), latitude=slice(90, 0))
-    subset_mean = dataset_mean.sel(longitude=slice(0, 115), latitude=slice(90, 0))
-    subset_instrumental = dataset_instrumental.sel(longitude=slice(0, 115), latitude=slice(0, 90))
-    subset_reference = dataset_reference.sel(longitude=slice(0, 115), latitude=slice(90, 0))
+    MAX_LAT = 90.0
+    MIN_LAT = -90.0
+    MAX_LON = 180.0
+    subset_members = dataset_members.sel(longitude=slice(0, MAX_LON), latitude=slice(MAX_LAT, MIN_LAT))
+    subset_mean = dataset_mean.sel(longitude=slice(0, MAX_LON), latitude=slice(MAX_LAT, MIN_LAT))
+    subset_instrumental = dataset_instrumental.sel(
+            longitude=slice(0, MAX_LON), latitude=slice(MIN_LAT, MAX_LAT))
+    subset_reference = dataset_reference.sel(
+            longitude=slice(0, MAX_LON), latitude=slice(MAX_LAT, MIN_LAT))
     
     
     # Test Kalman filter.
     my_filter = EnsembleKalmanFilter(subset_mean, subset_members,
             subset_instrumental)
-    mean_updated, members_updated = my_filter.update_mean_window('1961-01-01', '1961-06-28', 6, data_var=0.9)
-    """
-    
+    print("Filter built.")
+    mean_updated, members_updated = my_filter.update_mean_window(
+            '1961-01-01', '1961-06-28', 6, data_var=0.9)
+
+
     # Plot updated mean vs non updated vs reference.
-    updated = mean_updated.unstack('stacked_dim').sel(time='1961-01-16')
-    updated_member = member_updated.unstack('stacked_dim').sel(time='1961-01-16')
-    non_updated = subset_mean.anomaly.sel(time='1961-01-16')
-    non_updated_member = subset_members.sel(member_nr=9).anomaly.sel(time='1961-01-16')
-    reference = subset_reference.anomaly.sel(time='1961-01-16')
-    data = subset_instrumental.anomaly.sel(time='1961-01-16')
-    
+    date_plot = '1961-05-16'
+    updated_mean = mean_updated.sel(time=date_plot)
+    updated_mean = client.compute(updated_mean)
+    non_updated_mean = subset_mean.anomaly.sel(time=date_plot)
+    reference = subset_reference.anomaly.sel(time=date_plot)
+    data = subset_instrumental.anomaly.sel(time=date_plot)
+
     # Clip datasets to common extent.
-    updated = updated.where(
+
+    # First wait for finish.
+    updated_mean = updated_mean.result()
+    updated_mean = updated_mean.where(
+                    xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
+    non_updated_mean = non_updated_mean.where(
                 xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
-    updated_member = updated_member.where(
-                xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
-    non_updated = non_updated.where(
-                xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
-    non_updated_member = non_updated_member.where(
-                xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
-    
-    
+
     # Plot all with same colorbar.
     xr.set_options(cmap_sequential='RdYlBu_r')
-    levels = np.arange(-5, 5, 1)
+    levels = np.arange(-6, 6, 1)
     f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 6),
             subplot_kw={'projection': ccrs.PlateCarree()})
     
-    non_updated_member.plot(ax=ax1,
+    reference.plot(ax=ax1, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+        'label': 'anomaly (reference)'},
+            vmin=-6, vmax=6)
+    data.plot(ax=ax2, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+            'label': 'anomaly (instrumental)'},
+            vmin=-6, vmax=6)
+    non_updated_mean.plot(ax=ax3,
             cbar_kwargs={'ticks': levels, 'spacing':
             'proportional', 'label': 'anomaly (non updated)'},
-            vmin=-5, vmax=5)
-    updated.plot(ax=ax2, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+            vmin=-6, vmax=6)
+    updated_mean.plot(ax=ax4, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
             'label': 'anomaly (updated)'},
-            vmin=-5, vmax=5)
-    reference.plot(ax=ax3, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
-            'label': 'anomaly (reference)'},
-            vmin=-5, vmax=5)
-    updated_member.plot(ax=ax4, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
-            'label': 'anomaly (updated)'},
-            vmin=-5, vmax=5)
-    data.plot(ax=ax4, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
-            'label': 'anomaly (instrumental)'},
-            vmin=-5, vmax=5)
+                vmin=-6, vmax=6)
     ax1.coastlines()
     ax2.coastlines()
     ax3.coastlines()
     ax4.coastlines()
+        
+    plt.savefig("updating_plot_mean.png")
+
+    for i in range(1, 4):
+        print("Evalutating Member {}.".format(i))
+        start_time = time.time()
+        updated_member = members_updated.sel(member_nr=i).sel(time=date_plot)
+        updated_member = client.compute(updated_member)
+
+        # First wait for finish.
+        updated_member = updated_member.result()
+        end_time = time.time()
+        print(f"Updating run in {end_time - start_time}")
+        non_updated_member = subset_members.sel(member_nr=i).anomaly.sel(time=date_plot)
+
+        # Clip datasets to common extent.
+        updated_member = updated_member.where(
+                    xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
+        non_updated_member = non_updated_member.where(
+                    xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
     
-    plt.savefig("first_run_kalman.png")
-    plt.show()
-    """
-    return mean_updated, members_updated
+        # Plot all with same colorbar.
+        xr.set_options(cmap_sequential='RdYlBu_r')
+        levels = np.arange(-6, 6, 1)
+        f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 6),
+                subplot_kw={'projection': ccrs.PlateCarree()})
+        
+        reference.plot(ax=ax1, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+                'label': 'anomaly (reference)'},
+                vmin=-6, vmax=6)
+        data.plot(ax=ax2, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+                'label': 'anomaly (instrumental)'},
+                vmin=-6, vmax=6)
+        non_updated_member.plot(ax=ax3,
+                cbar_kwargs={'ticks': levels, 'spacing':
+                'proportional', 'label': 'anomaly (non updated)'},
+                vmin=-6, vmax=6)
+        updated_member.plot(ax=ax4, cbar_kwargs={'ticks': levels, 'spacing': 'proportional',
+                'label': 'anomaly (updated)'},
+                vmin=-6, vmax=6)
+        ax1.coastlines()
+        ax2.coastlines()
+        ax3.coastlines()
+        ax4.coastlines()
+        
+        plt.savefig("updating_plot_{}.png".format(i))
 
 
 if __name__ == "__main__":
