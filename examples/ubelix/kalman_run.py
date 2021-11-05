@@ -20,8 +20,11 @@ def main():
     from dask_jobqueue import SLURMCluster
     from dask.distributed import Client
     cluster = SLURMCluster(
-        cores=4,
-        memory="12 GB"
+        cores=1,
+        memory="16 GB",
+        death_timeout=6000,
+        walltime="02:00:00",
+        job_extra=['--qos="job_epyc2"', '--partition="epyc2"']
     )
     client = Client(cluster)
 
@@ -37,7 +40,7 @@ def main():
     # ensembles members out of 30. The user should specify this number to the
     # loading function (this will be automated in the future).
     base_folder = "/storage/homefs/ct19x463/Dev/Climate/Data/"
-    TOT_ENSEMBLES_NUMBER = 30
+    TOT_ENSEMBLES_NUMBER = 5
     
     # The loading function returns 4 datasets: the ensemble members, the ensemble
     # mean, the instrumental data and the reference dataset.
@@ -46,11 +49,16 @@ def main():
     print("Loading done.")
 
     # Load in distributed memory.
-    dataset_mean.persist()
-    dataset_members.persist()
-    dataset_instrumental.persist()
-    dataset_reference.persist()
+    # First have to chunk the non-dask datasets.
+    dataset_instrumental = dataset_instrumental.chunk()
+    dataset_reference = dataset_reference.chunk()
+
+    dataset_mean = client.persist(dataset_mean)
+    dataset_members = client.persist(dataset_members)
+    dataset_instrumental = client.persist(dataset_instrumental)
+    dataset_reference = client.persist(dataset_reference)
     print("Loading dataset in distributed memory done.")
+    client.profile(filename="dask-profile.html") # Collect usage information.
     
     # Select a sub-region (Europe) to make computations easier.
     # Note that there is a bug in xarray that forces the selection of a subset of
@@ -72,14 +80,23 @@ def main():
     my_filter = EnsembleKalmanFilter(subset_mean, subset_members,
             subset_instrumental)
     print("Filter built.")
+    """
     mean_updated, members_updated = my_filter.update_mean_window(
             '1961-01-01', '1961-06-28', 6, data_var=0.9)
+    """
 
+    tmp = my_filter.update_mean_window(
+            '1961-01-01', '1961-06-28', 6, data_var=0.9)
+    tmp2 = client.compute(tmp)
+    print(tmp2.result())
+
+    """
 
     # Plot updated mean vs non updated vs reference.
     date_plot = '1961-05-16'
-    updated_mean = mean_updated.sel(time=date_plot)
-    updated_mean = client.compute(updated_mean)
+    updated_mean_slice_future = mean_updated.sel(time=date_plot)
+    updated_mean_slice_future = client.compute(updated_mean_slice_future)
+
     non_updated_mean = subset_mean.anomaly.sel(time=date_plot)
     reference = subset_reference.anomaly.sel(time=date_plot)
     data = subset_instrumental.anomaly.sel(time=date_plot)
@@ -87,7 +104,9 @@ def main():
     # Clip datasets to common extent.
 
     # First wait for finish.
-    updated_mean = updated_mean.result()
+    updated_mean = updated_mean_slice_future.result()
+    print("Finished updating the mean.")
+
     updated_mean = updated_mean.where(
                     xr.ufuncs.logical_not(xr.ufuncs.isnan(reference)))
     non_updated_mean = non_updated_mean.where(
@@ -162,6 +181,7 @@ def main():
         ax4.coastlines()
         
         plt.savefig("updating_plot_{}.png".format(i))
+        """
 
 
 if __name__ == "__main__":
