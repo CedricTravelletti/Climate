@@ -36,7 +36,7 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
 
     # Loop over members folders and merge.
     datasets = []
-    for i in range(1, TOT_ENSEMBLES_NUMBER + 1):
+    for i in range(1, int(TOT_ENSEMBLES_NUMBER) + 1):
         current_folder = os.path.join(ens_mem_folder, "member_{}/".format(i))
         print(current_folder)
         datasets.append(xr.open_mfdataset(current_folder + '*.nc', concat_dim="time", combine="nested",

@@ -25,8 +25,8 @@
 
 
 # The base folder where data will be stored.
-BASE_FOLDER="/storage/homefs/ct19x463/Dev/Climate/Data"
-# BASE_FOLDER = "/home/cedric/PHD/Dev/Climate/Data/"
+# BASE_FOLDER="/storage/homefs/ct19x463/Dev/Climate/Data"
+BASE_FOLDER="/home/cedric/PHD/Dev/Climate/Data/"
 TOT_ENS_NUMBER=30 # Total number of different ensembles.
 
 
@@ -93,3 +93,9 @@ echo "Done moving each ensemble member to its own directory."
 cd $initial_wd
 echo $ensemble_members_folder
 python preprocess_helper.py "$ensemble_members_folder" "$TOT_ENS_NUMBER"
+
+# Last, we also process the ensemble members and mean to zarr files, 
+# for easier chunk alignment.
+echo "Converting to zarr."
+python convert_to_zarr.py "$BASE_FOLDER" $TOT_ENS_NUMBER
+echo "Done converting to zarr.\n Preprocessing completed."

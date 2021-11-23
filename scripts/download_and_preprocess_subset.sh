@@ -27,6 +27,7 @@
 # The base folder where data will be stored.
 # BASE_FOLDER="/storage/homefs/ct19x463/Dev/Climate/Data"
 BASE_FOLDER="/home/cedric/PHD/Dev/Climate/Data/"
+TOT_ENS_NUMBER=3 # Total number of different ensembles.
 
 
 initial_wd=`pwd` # Save initial directory.
@@ -62,8 +63,7 @@ curl http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/ | grep -i nc | sed 
 echo "Got URLs. Starting download."
 mkdir -p "Means"
 cd "./Means/"
-
-# Only download subset: first 10 ensemble members and years 1960-1999.
+# Only download year 1969-1999.
 cat "../urls_ensmean.txt" | grep -E "^([^.]+_19[6-9][0-9].+nc)" | parallel -j 10 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ensmean/{}"
 
 cd ..
@@ -71,7 +71,8 @@ cd ..
 mkdir -p "Members"
 cd "./Members/"
 ensemble_members_folder=`pwd` # Save directory location.
-cat "../urls_ens_mem.txt" | grep -E "^([^.]+mem_[1-9]_19[6-9][0-9].+nc)" | parallel -j 10 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/{}"
+# Only download first 3 ensemble members.
+cat "../urls_ens_mem.txt" | grep -E "^([^.]+mem_[1-3]_19[6-9][0-9].+nc)" | parallel -j 10 --gnu "wget http://giub-torrent.unibe.ch/DATA/REUSE/CCC400_ens_mem/{}"
 
 echo "Download Finished. Starting postprocessing."
 
@@ -93,4 +94,10 @@ echo "Done moving each ensemble member to its own directory."
 # to each NetCDF4 file.
 cd $initial_wd
 echo $ensemble_members_folder
-python preprocess_helper.py "$ensemble_members_folder" 10
+python preprocess_helper.py "$ensemble_members_folder" "$TOT_ENS_NUMBER"
+
+# Last, we also process the ensemble members and mean to zarr files, 
+# for easier chunk alignment.
+echo "Converting to zarr."
+python convert_to_zarr.py "$BASE_FOLDER" $TOT_ENS_NUMBER
+echo "Done converting to zarr.\n Preprocessing completed."
