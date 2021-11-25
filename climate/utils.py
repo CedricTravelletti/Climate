@@ -7,8 +7,12 @@ import xarray as xr
 from sklearn.neighbors import BallTree
 
 
-def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
-    """ Load the climate dataset.
+def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
+    """ Load the whole climate dataset.
+
+    The dataset consists of ensemble mean, ensemble members, reference data 
+    and instrumental data. Those are returned as 4 different xarray datasets.
+    Note that anomalies w.r.t. the 1961-01-01, 1990-12-31 base period are returned.
 
     Parameters
     ----------
@@ -17,6 +21,14 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
         Instrumental/ folder.
     TOT_ENSEMBLES_NUMBER: int
         Only load the first TOT_ENSEMBLES_NUMBER ensemble members.
+    ignore_members: bool (default=False)
+        If set to yes, to not load the ensemble members. This can decrease the 
+        loading time on systems with slow disks. Note that ensemble_members is 
+        still returned, but it is just a copy of ensemble_mean.
+
+    Returns
+    -------
+    xarray.Dataset: dataset_mean, dataset_members, dataset_instrumental, dataset_reference
 
     """
     ens_mean_folder = os.path.join(base_folder, "Ensembles/Means/")
@@ -35,15 +47,19 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER):
                           compat='override')
 
     # Loop over members folders and merge.
-    datasets = []
-    for i in range(1, int(TOT_ENSEMBLES_NUMBER) + 1):
-        current_folder = os.path.join(ens_mem_folder, "member_{}/".format(i))
-        print(current_folder)
-        datasets.append(xr.open_mfdataset(current_folder + '*.nc', concat_dim="time", combine="nested",
-                              data_vars='minimal', coords='minimal',
-                              compat='override'))
-    
-    dataset_members = xr.combine_by_coords(datasets)
+    if ignore_members is False:
+        datasets = []
+        for i in range(1, int(TOT_ENSEMBLES_NUMBER) + 1):
+            current_folder = os.path.join(ens_mem_folder, "member_{}/".format(i))
+            print(current_folder)
+            datasets.append(
+                    xr.open_mfdataset(current_folder + '*.nc', concat_dim="time", combine="nested",
+                                  data_vars='minimal', coords='minimal',
+                                  compat='override'))
+        
+        dataset_members = xr.combine_by_coords(datasets)
+    # Otherwise just return a dummy copy.
+    else: dataset_members = dataset_mean.copy(deep=True)
 
     # --------------
     # POSTPROCESSING
@@ -224,3 +240,36 @@ def build_base_forward(model_dataset, data_dataset):
         G[data_ind, model_ind] = 1.0
 
     return G
+
+def load_zarr_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
+    """ Same as load dataset, but with the zarr version of ensemble means and members.
+
+    Parameters
+    ----------
+    base_folder: string
+        Path to the root folder for the data. Should contain the Ensembles/ and
+        Instrumental/ folder.
+    TOT_ENSEMBLES_NUMBER: int
+        Only load the first TOT_ENSEMBLES_NUMBER ensemble members.
+    ignore_members: bool (default=False)
+        If set to yes, to not load the ensemble members. This can decrease the 
+        loading time on systems with slow disks. Note that ensemble_members is 
+        still returned, but it is just a copy of ensemble_mean.
+
+    Returns
+    -------
+    xarray.Dataset: dataset_mean, dataset_members, dataset_instrumental, dataset_reference, 
+        dataset_mean_zarr, dataset_members_zarr
+
+    """
+    ens_mean_path = os.path.join(base_folder, "ensemble_mean.zarr")
+    ens_members_path = os.path.join(base_folder, "ensemble_members.zarr")
+
+    dataset_mean, dataset_members, dataset_instrumental, dataset_reference = load_dataset(
+            base_folder, TOT_ENSEMBLES_NUMBER, ignore_members)
+    dataset_mean_zarr = xr.open_zarr(ens_mean_path)
+    dataset_members_zarr = xr.open_zarr(ens_members_path)
+
+    return (dataset_mean, dataset_members,
+            dataset_instrumental, dataset_reference,
+            dataset_mean_zarr, dataset_members_zarr)
