@@ -32,8 +32,9 @@ def main():
     covs = []
     dists = []
     cov = dask.array.cov(
-            dataset_members_zarr.anomaly, dataset_members_zarr.anomaly, rowvar=False)
+            dataset_members_zarr.anomaly, rowvar=False)
     for i, j in zip(inds_i, inds_j):
+        print(i)
         covs.append(cov[i, j].compute())
         coords_i = [radians(dataset_members_zarr.latitude.values[i]),
                 radians(dataset_members_zarr.longitude.values[i])]
