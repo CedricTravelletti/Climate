@@ -107,8 +107,8 @@ class DatasetWrapper():
         # computations fit in memory.
         stacked_data = self.dataset.anomaly.sel(indexers).sel(
                 time=slice(time_begin, time_end)).stack(
-                        stacked_dim=('time', 'latitude', 'longitude'))
-                #.chunk({'stacked_dim': self.chunk_size})
+                        stacked_dim=('time', 'latitude', 'longitude')).chunk(
+                                {'stacked_dim': self.chunk_size})
         return stacked_data
 
     def unstack_window_vector(self, window_vector):
@@ -119,3 +119,39 @@ class DatasetWrapper():
         # First copy it into a dataset of the current shape.
         result = self.dataset.copy(data=window_vector)
         return result.unstack('stacked_dim')
+
+
+class ZarrDatasetWrapper():
+    def __init__(self, dataset_members_zarr, unstacked_data_holder):
+        self.dataset_members = dataset_members_zarr
+        self.unstacked_data_holder = unstacked_data_holder
+
+        self.spatial_size = (unstacked_data_holder.latitude.shape[0]
+                * unstacked_data_holder.longitude.shape[0])
+        self.timestamps = unstacked_data_holder.time.values
+
+    def get_window_vector(self, time_begin, time_end, member_nr=None):
+        time_index_begin = self.get_time_index(time_begin)
+        time_index_end = self.get_time_index(time_end)
+
+        if member_nr is not None:
+            vector_members = self.dataset_members.anomaly[member_nr,
+                time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
+        else: 
+            vector_members = self.dataset_members.anomaly[:,
+                time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
+        return vector_members
+
+    def get_time_index(self, time_string):
+        """ Find the index (in the list of timestamps) of a given date.
+        Date are in the format '1988-05-16'.
+
+        """
+        time_indices = np.where(self.timestamps==np.datetime64(time_string))[0]
+        if not len(time_indices) == 1:
+            raise ValueError("Date not found.")
+        return time_indices[0]
+
+    @property
+    def member_nr(self):
+        return self.dataset_members.member_nr.values
