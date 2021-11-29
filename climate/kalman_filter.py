@@ -149,10 +149,11 @@ class EnsembleKalmanFilter():
         data_cov = data_var * eye(vector_data.shape[0], chunks=self.chunk_size).rechunk()
 
         # Define the graph for computing the updated mean vector.
-        to_invert = (matmul(
+        to_invert = matmul(
                         G,
                         cov_pushfwd)
-                    + data_cov).rechunk()
+                    + data_cov
+        to_invert = to_invert.rechunk(to_invert.shape[0], to_invert.shape[1])
         sqrt = cholesky(to_invert, lower=True)
 
         kalman_gain = matmul(
@@ -171,7 +172,7 @@ class EnsembleKalmanFilter():
                 vector_mean +
                 matmul(kalman_gain, prior_misfit)
                 )
-        vector_mean_updated = self.dask_client.compute(vector_mean_updated)
+        vector_mean_updated = self.dask_client.compute(vector_mean_updated).result()
 
         # Unstack the vector to go back to the grid format.
         mean_updated = vector_mean_updated.unstack('stacked_dim')
@@ -185,7 +186,7 @@ class EnsembleKalmanFilter():
                     vector_member +
                     matmul(kalman_gain_tilde, matmul(G, vector_member))
                     )
-            vector_member_updated = self.dask_client.compute(vector_member_updated)
+            vector_member_updated = self.dask_client.compute(vector_member_updated).result()
 
             # member_updated = vector_member_updated.unstack('stacked_dim')
             vector_members_updated.append(vector_member_updated)
