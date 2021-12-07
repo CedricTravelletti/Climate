@@ -3,10 +3,11 @@ from climate.data_wrapper import DatasetWrapper, ZarrDatasetWrapper
 from climate.utils import build_base_forward
 from scipy.linalg import block_diag
 import xarray as xr
-from dask.array import matmul, eye, transpose, cov
+from dask.array import matmul, eye, transpose
 from dask.array.linalg import inv, cholesky
 import dask.array as da
 import dask
+from climate.dask_covariance import cov
 
 
 # Set default chunk size so that automatic rechunking works.
@@ -149,10 +150,10 @@ class EnsembleKalmanFilter():
         data_cov = data_var * eye(vector_data.shape[0], chunks=self.chunk_size).rechunk()
 
         # Define the graph for computing the updated mean vector.
-        to_invert = matmul(
+        to_invert = (matmul(
                         G,
                         cov_pushfwd)
-                    + data_cov
+                    + data_cov)
         to_invert = to_invert.rechunk(to_invert.shape[0], to_invert.shape[1])
         sqrt = cholesky(to_invert, lower=True)
 
