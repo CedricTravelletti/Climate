@@ -21,14 +21,19 @@ class EnsembleKalmanFilter():
     def __init__(self, dataset_mean, dataset_members_zarr, dataset_instrumental,
             dask_client,
             chunk_size=1000):
-        # First wrap the datasets.
+        self.dask_client = dask_client
+        self.chunk_size = chunk_size
+
+        # First load everything into distributed memory.
+        dataset_mean = self.dask_client.persist(dataset_mean)
+        dataset_members_zarr = self.dask_client.persist(dataset_members_zarr)
+        dataset_instrumental = self.dask_client.persist(dataset_instrumental)
+
+        # Wrap the datasets.
         self.dataset_mean = DatasetWrapper(dataset_mean, chunk_size)
         self.dataset_members = ZarrDatasetWrapper(dataset_members_zarr,
                 dataset_mean.copy(deep=True))
         self.dataset_instrumental = DatasetWrapper(dataset_instrumental, chunk_size)
-
-        self.dask_client = dask_client
-        self.chunk_size = chunk_size
 
         # Get the base forward (the matrix making the translation between the
         # instrumental dataset and the other ones).
@@ -96,6 +101,9 @@ class EnsembleKalmanFilter():
         # Get the stacked window vectors for each ensemble member.
         vector_members = self.dataset_members.get_window_vector(time_begin, time_end)
 
+        # Scatter everywhere so easier to compute covariance matrix.
+        vector_members = self.dask_client.scatter(vector_members, broadcast=True).result()
+
         # Compute covariance matrix acrosss the different members.
         # Note that the below is a lazy operation (dask).
         cov_matrix = cov(vector_members, rowvar=False)
@@ -135,6 +143,10 @@ class EnsembleKalmanFilter():
         vector_mean = self.dataset_mean.get_window_vector(time_begin, time_end)
         vector_data = self.dataset_instrumental.get_window_vector(time_begin, time_end)
 
+        # Scatter to all client (data is small).
+        vector_mean = self.dask_client.scatter(vector_mean, broadcast=True).result()
+        vector_data = self.dask_client.scatter(vector_data, broadcast=True).result()
+
         # Get rid of the Nans.
         vector_data = vector_data[np.logical_not(np.isnan(vector_data))]
 
@@ -143,6 +155,9 @@ class EnsembleKalmanFilter():
         G = da.from_array(G)
 
         cov = self.get_ensemble_covariance(time_begin, time_end)
+
+        # Persist the covariance matrix into distributed memory.
+        cov = self.dask_client.persist(cov)
 
         # Trigger computation of covariance pushforward and persist it on the 
         # cluster, since we will do several operations with it.
