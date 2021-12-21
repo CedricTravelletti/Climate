@@ -21,12 +21,12 @@ def main(base_folder, TOT_ENSEMBLES_NUMBER):
     # does not allow multi-indices. This means we have to take care about order 
     # when we unstack.
     stacked_mean = dataset_mean.drop(
-            ['temperature', 'mean_temp', 'month']).stack(
+            ['temperature', 'month']).stack(
             stacked_dim=('time', 'latitude', 'longitude')).chunk(chunk_size)
     stacked_mean.reset_index('stacked_dim').to_zarr(output_path_mean, mode="w")
     
     stacked_members = dataset_members.drop(
-            ['temperature', 'mean_temp', 'month']).stack(
+            ['temperature']).stack(
             stacked_dim=('time', 'latitude', 'longitude')).chunk(
                     {'member_nr': 1, 'stacked_dim': chunk_size})
     stacked_members.reset_index('stacked_dim').to_zarr(output_path_members, mode="w")

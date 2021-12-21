@@ -3,6 +3,7 @@
 """
 import os
 import numpy as np
+from datetime import datetime
 import xarray as xr
 from sklearn.neighbors import BallTree
 
@@ -127,29 +128,16 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     # Cast to common dtype.
     dataset_reference['temperature'] = dataset_reference['temperature'].astype(np.float32)
 
-    # Compute anomalies with respect to the 1961-1990 mean.
-    # Note that anomalies are with respect to the long term mean for each given
-    # month.
-    monthly_avg_mean = dataset_mean.temperature.sel(
-            time=slice('1961-01-01', '1990-12-31')).groupby('time.month').mean(dim='time')
-    monthly_avg_members = dataset_members.temperature.sel(
-            time=slice('1961-01-01', '1990-12-31')).groupby('time.month').mean(dim='time')
-    monthly_avg_reference = dataset_reference.temperature.sel(
-            time=slice('1961-01-01', '1990-12-31')).groupby('time.month').mean(dim='time')
+    # Compute difference wrt mean.
+    dataset_members['difference'] = dataset_members.temperature - dataset_mean.temperature
 
-    dataset_mean['anomaly'] = (dataset_mean.temperature.groupby('time.month')
-                                - monthly_avg_mean)
-    dataset_members['anomaly'] = (dataset_members.temperature.groupby('time.month')
-                                - monthly_avg_members)
-    dataset_reference['anomaly'] = (dataset_reference.temperature.groupby('time.month')
-                                    - monthly_avg_reference)
-
-    dataset_mean['mean_temp'] = monthly_avg_mean
-    dataset_members['mean_temp'] = monthly_avg_members
-    dataset_reference['mean_temp'] = monthly_avg_reference
+    # Compute 71 year runnig mean anomaly for the reference dataset and 
+    # the ensemble mean.
+    dataset_mean = rolling_mean(dataset_mean, yr_delta_plus=35, yr_delta_minus=-35)
+    dataset_reference = rolling_mean(dataset_reference, yr_delta_plus=35, yr_delta_minus=-35)
 
     # Rechunk the anomaly to have a big enough chunk size.
-    dataset_members['anomaly'] = dataset_members.anomaly.chunk({'time': 480})
+    dataset_members['difference'] = dataset_members.difference.chunk({'time': 480})
 
     """
     # Clip datasets to common extent.
@@ -273,3 +261,78 @@ def load_zarr_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     return (dataset_mean, dataset_members,
             dataset_instrumental, dataset_reference,
             dataset_mean_zarr, dataset_members_zarr)
+
+def add_year(dt64, yr_delta):
+    """ Given a np.datetime64 add some number of years to it.
+
+    """
+    # convert to timestamp:
+    ts = (dt64 - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 's')
+    
+    # standard utctime from timestamp
+    dt = datetime.utcfromtimestamp(ts)
+    
+    # update year
+    dt = dt.replace(year=dt.year+yr_delta)
+    
+    # convert back to numpy.datetime64:
+    dt64 = np.datetime64(dt)
+
+    return dt64
+
+def get_year(dt64):
+    """ Get the year from a given numpy.datetime64 object.
+
+    """
+    # convert to timestamp:
+    ts = (dt64 - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 's')
+    
+    # standard utctime from timestamp
+    dt = datetime.utcfromtimestamp(ts)
+
+    return dt.year
+
+def get_year_window(dt64):
+    """ Given a np.datetime64, return the first and last day of the year 
+    (to have a window).
+
+    """
+    # convert to timestamp:
+    ts = (dt64 - np.datetime64('1970-01-01T00:00:00')) / np.timedelta64(1, 's')
+    
+    # standard utctime from timestamp
+    dt = datetime.utcfromtimestamp(ts)
+    
+    dt_begin = dt.replace(month=1, day=1)
+    dt_end = dt.replace(month=12, day=31)
+    
+    # convert back to numpy.datetime64:
+    dt64_begin = np.datetime64(dt_begin)
+    dt64_end = np.datetime64(dt_end)
+
+    return dt64_begin, dt64_end
+
+def rolling_mean(dataset, yr_delta_plus, yr_delta_minus):
+    """ Compute rolling mean with some given window.
+
+    """
+    # Find the first and last year in the dataset.
+    yr_min = get_year(dataset.time.values.min())
+    yr_max = get_year(dataset.time.values.max())
+
+    # Do computation for each year in the dataset.
+    for i in range(yr_min, yr_max+1):
+        yr_current = np.datetime64("{}-01-01".format(i))
+        # First compute (for each month) the average in a 71 year window 
+        # around the current year.
+        time_begin = add_year(yr_current, yr_delta_minus)
+        time_end = add_year(yr_current, yr_delta_plus)
+        monthly_avg_mean = dataset.temperature.sel(
+                time=slice(time_begin, time_end)).groupby('time.month').mean(dim='time')
+    
+        # Now subtract from current year.
+        yr_begin, yr_end = get_year_window(yr_current)
+        dataset['anomaly'] = (
+                dataset.temperature.sel(time=slice(yr_begin, yr_end))
+                - monthly_avg_mean).persist()
+    return dataset.persist()
