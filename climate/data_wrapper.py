@@ -122,6 +122,10 @@ class DatasetWrapper():
 
 
 class ZarrDatasetWrapper():
+    """ Wrapper for Zarr datasets. Basically only used for dataset members.
+    Note that dataset_members contain 'differences' from the dataset mean.
+
+    """
     def __init__(self, dataset_members_zarr, unstacked_data_holder):
         self.dataset_members = dataset_members_zarr
         self.unstacked_data_holder = unstacked_data_holder
@@ -135,10 +139,10 @@ class ZarrDatasetWrapper():
         time_index_end = self.get_time_index(time_end)
 
         if member_nr is not None:
-            vector_members = self.dataset_members.anomaly[member_nr,
+            vector_members = self.dataset_members.difference[member_nr,
                 time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
         else: 
-            vector_members = self.dataset_members.anomaly[:,
+            vector_members = self.dataset_members.difference[:,
                 time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
         return vector_members
 
@@ -163,7 +167,7 @@ class ZarrDatasetWrapper():
 
         # Copy the spatial structure from a dummy dataset.
         data_holder = self.unstacked_data_holder.sel(time=slice(time_begin, time_end))
-        data_holder = data_holder.anomaly.stack(
+        data_holder = data_holder.difference.stack(
                         stacked_dim=('time', 'latitude', 'longitude'))
         unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
         return unstacked_data
