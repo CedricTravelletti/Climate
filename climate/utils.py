@@ -247,7 +247,7 @@ def load_zarr_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     Returns
     -------
     xarray.Dataset: dataset_mean, dataset_members, dataset_instrumental, dataset_reference, 
-        dataset_mean_zarr, dataset_members_zarr
+        dataset_members_zarr
 
     """
     ens_mean_path = os.path.join(base_folder, "ensemble_mean.zarr")
@@ -255,12 +255,11 @@ def load_zarr_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
 
     dataset_mean, dataset_members, dataset_instrumental, dataset_reference = load_dataset(
             base_folder, TOT_ENSEMBLES_NUMBER, ignore_members)
-    dataset_mean_zarr = xr.open_zarr(ens_mean_path)
     dataset_members_zarr = xr.open_zarr(ens_members_path)
 
     return (dataset_mean, dataset_members,
             dataset_instrumental, dataset_reference,
-            dataset_mean_zarr, dataset_members_zarr)
+            dataset_members_zarr)
 
 def add_year(dt64, yr_delta):
     """ Given a np.datetime64 add some number of years to it.
