@@ -332,6 +332,6 @@ def rolling_mean(dataset, yr_delta_plus, yr_delta_minus):
         # Now subtract from current year.
         yr_begin, yr_end = get_year_window(yr_current)
         dataset['anomaly'] = (
-                dataset.temperature.sel(time=slice(yr_begin, yr_end))
+                dataset.temperature.sel(time=slice(yr_begin, yr_end)).groupby('time.month')
                 - monthly_avg_mean).persist()
     return dataset.persist()
