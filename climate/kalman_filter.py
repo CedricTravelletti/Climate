@@ -124,7 +124,8 @@ class EnsembleKalmanFilter():
         n_months: int
             Number of datapoints contained in the window.
             The datasets used here contain datapoins each 16th of the month, so if 
-            begin is '1961-01-01' and end is '1961-06-28' then the number of months (datapoints) will be 6.
+            begin is '1961-01-01' and end is '1961-06-28' then the number of 
+            months (datapoints) will be 6.
             Will be automated in the future.
         data_var: float
             Variance of the observational noise.
@@ -334,12 +335,10 @@ class EnsembleKalmanFilterScatter():
         # Get the stacked window vectors for each ensemble member.
         vector_members = self.dataset_members.get_window_vector(time_begin, time_end)
 
-        # Scatter everywhere so easier to compute covariance matrix.
-        vector_members = self.dask_client.scatter(vector_members, broadcast=True)
-
         # Compute covariance matrix acrosss the different members.
         # Note that the below is a lazy operation (dask).
         cov_matrix = cov(vector_members, rowvar=False)
+
         return cov_matrix
 
     def update_mean_window(self, time_begin, time_end, n_months, data_var):
@@ -357,7 +356,8 @@ class EnsembleKalmanFilterScatter():
         n_months: int
             Number of datapoints contained in the window.
             The datasets used here contain datapoins each 16th of the month, so if 
-            begin is '1961-01-01' and end is '1961-06-28' then the number of months (datapoints) will be 6.
+            begin is '1961-01-01' and end is '1961-06-28' then the number of 
+            months (datapoints) will be 6.
             Will be automated in the future.
         data_var: float
             Variance of the observational noise.
@@ -388,17 +388,13 @@ class EnsembleKalmanFilterScatter():
         # Get covariance matrix and forward.
         G = self.get_forward_for_window(time_begin, time_end, n_months)
         G = da.from_array(G)
-        G_fut = self.dask_client.scatter(G, broadcast=True)
+        G = self.dask_client.persist(G)
 
         cov = self.get_ensemble_covariance(time_begin, time_end)
 
         # Persist the covariance matrix into distributed memory.
         cov = self.dask_client.persist(cov)
-        import time
-        print("Sleeping")
-        time.sleep(10*60)
 
-        """
         # Trigger computation of covariance pushforward and persist it on the 
         # cluster, since we will do several operations with it.
         cov_pushfwd = self.dask_client.persist(matmul(cov, transpose(G)))
@@ -411,8 +407,10 @@ class EnsembleKalmanFilterScatter():
                         cov_pushfwd)
                     + data_cov)
         to_invert = to_invert.rechunk(to_invert.shape[0], to_invert.shape[1])
-        print(to_invert)
         sqrt = cholesky(to_invert, lower=True)
+
+        to_invert = self.dask_client.persist(to_invert)
+        sqrt = self.dask_client.persist(sqrt)
 
         kalman_gain = matmul(
                 cov_pushfwd,
@@ -424,42 +422,39 @@ class EnsembleKalmanFilterScatter():
                     inv(sqrt + cholesky(data_cov, lower=True))
                     )
                 )
+        kalman_gain = self.dask_client.persist(kalman_gain)
+        kalman_gain_tilde = self.dask_client.persist(kalman_gain_tilde)
 
-        prior_misfit = vector_data - matmul(G, vector_mean)
-        vector_mean_updated = (
+        # Warning: have to make sure that the computations 
+        # do not happen locally.
+
+        vector_data = self.dask_client.persist(vector_data)
+        prior_misfit = (
+                vector_data
+                - matmul(G, self.dask_client.persist(vector_mean)))
+
+        mean_update_part = self.dask_client.persist(
+                matmul(kalman_gain, prior_misfit))
+
+        vector_mean_updated = self.dask_client.compute(
                 vector_mean +
-                matmul(kalman_gain, prior_misfit)
+                mean_update_part
                 )
-        vector_mean_updated = self.dask_client.persist(vector_mean_updated)
+
 
         # Loop over members.
         vector_members_updated = []
         # for i in self.dataset_members.member_nr:
-        for i in range(1, 3):
-            print(i)
+        for i in range(30):
             vector_member = self.dataset_members.get_window_vector(
                     time_begin, time_end, member_nr=i)
             vector_member_updated = (
                     vector_member +
                     matmul(kalman_gain_tilde, matmul(G, vector_member))
                     )
-            print(vector_member_updated)
-            vector_member_updated = self.dask_client.persist(vector_member_updated)
+            vector_member_updated = self.dask_client.compute(vector_member_updated)
 
             # member_updated = vector_member_updated.unstack('stacked_dim')
             vector_members_updated.append(vector_member_updated)
 
-        time.sleep(7*60)
         return vector_mean_updated, vector_members_updated
-        """
-        return 1.0, 2.0
-        """
-
-        # Unstack the vector to go back to the grid format.
-        mean_updated = self.dask_client.compute(vector_mean_updated.unstack('stacked_dim')).result()
-
-        # Put into single dataset.
-        members_updated = xr.concat(vector_members_updated, dim='member_nr')
-
-        return mean_updated, members_updated
-        """
