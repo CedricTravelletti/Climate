@@ -315,10 +315,15 @@ def rolling_mean(dataset, yr_delta_plus, yr_delta_minus):
     """ Compute rolling mean with some given window.
 
     """
+    # First need to duplicate the variable so it already has a 
+    # time component. 
+    dataset['anomaly'] = dataset['temperature']
+
     # Find the first and last year in the dataset.
     yr_min = get_year(dataset.time.values.min())
     yr_max = get_year(dataset.time.values.max())
 
+    anomalies = []
     # Do computation for each year in the dataset.
     for i in range(yr_min, yr_max+1):
         yr_current = np.datetime64("{}-01-01".format(i))
@@ -331,7 +336,8 @@ def rolling_mean(dataset, yr_delta_plus, yr_delta_minus):
     
         # Now subtract from current year.
         yr_begin, yr_end = get_year_window(yr_current)
-        dataset['anomaly'] = (
+        anomalies.append((
                 dataset.temperature.sel(time=slice(yr_begin, yr_end)).groupby('time.month')
-                - monthly_avg_mean).persist()
-    return dataset.persist()
+                - monthly_avg_mean).drop_vars('month'))
+    dataset['anomaly'] = xr.concat(anomalies, dim='time')
+    return dataset
