@@ -265,7 +265,7 @@ class EnsembleKalmanFilterScatter():
 
         # Wrap the datasets.
         self.dataset_mean = DatasetWrapper(dataset_mean, chunk_size)
-        self.dataset_members = ZarrDatasetWrapper(dataset_members_zarr,
+        self.dataset_members = ZarrDatasetWrapper(dataset_members_zarr, 
                 dataset_mean.copy(deep=True))
         self.dataset_instrumental = DatasetWrapper(dataset_instrumental, chunk_size)
 
