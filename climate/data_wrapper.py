@@ -116,9 +116,17 @@ class DatasetWrapper():
         numpy format), unstack it into a dataset of the original dimension.
 
         """
-        # First copy it into a dataset of the current shape.
-        result = self.dataset.copy(data=window_vector)
-        return result.unstack('stacked_dim')
+        # Find the corresponding time window.
+        time_begin = window_vector.time.values.min()
+        time_end = window_vector.time.values.max()
+
+        # Copy the spatial structure from a dummy dataset.
+        data_holder = self.dataset.sel(time=slice(time_begin, time_end))
+        data_holder = data_holder.anomaly.stack(
+                        stacked_dim=('time', 'latitude', 'longitude'))
+        unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
+
+        return unstacked_data
 
 
 class ZarrDatasetWrapper():
