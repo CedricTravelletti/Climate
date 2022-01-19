@@ -175,7 +175,8 @@ class ZarrDatasetWrapper():
 
         # Copy the spatial structure from a dummy dataset.
         data_holder = self.unstacked_data_holder.sel(time=slice(time_begin, time_end))
-        data_holder = data_holder.difference.stack(
+        data_holder = data_holder.anomaly.stack(
                         stacked_dim=('time', 'latitude', 'longitude'))
         unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
+        unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
         return unstacked_data
