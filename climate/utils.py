@@ -135,6 +135,9 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     # Rechunk the anomaly to have a big enough chunk size.
     dataset_members['difference'] = dataset_members.difference.chunk({'time': 480})
 
+    # Put the instrumental dataset into Dask format.
+    dataset_instrumental['anomaly'] = dataset_instrumental['anomaly'].chunk()
+
     """
     # Clip datasets to common extent.
     # The reference dataset is only defined on land, hence, we can cut out
