@@ -106,7 +106,7 @@ class EnsembleKalmanFilter():
 
         # Compute covariance matrix acrosss the different members.
         # Note that the below is a lazy operation (dask).
-        cov_matrix = cov(vector_members, rowvar=False)
+        cov_matrix = cov(vector_members.result(), rowvar=False)
         return cov_matrix
 
     def update_mean_window(self, time_begin, time_end, n_months, data_var):
