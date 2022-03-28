@@ -8,12 +8,8 @@ import xarray as xr
 from sklearn.neighbors import BallTree
 
 
-def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
-    """ Load the whole climate dataset.
-
-    The dataset consists of ensemble mean, ensemble members, reference data 
-    and instrumental data. Those are returned as 4 different xarray datasets.
-    Note that anomalies w.r.t. the 1961-01-01, 1990-12-31 base period are returned.
+def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
+    """ Helper function for dataset loading. 
 
     Parameters
     ----------
@@ -229,8 +225,13 @@ def build_base_forward(model_dataset, data_dataset):
 
     return G
 
-def load_zarr_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
-    """ Same as load dataset, but with the zarr version of ensemble means and members.
+def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
+    """ Load the whole climate dataset. Note the the ensemble members 
+    are also returned in ZARR format, since this allows for faster access.
+
+    The dataset consists of ensemble mean, ensemble members, reference data 
+    and instrumental data. Those are returned as 4 different xarray datasets.
+    Note that anomalies w.r.t. the 1961-01-01, 1990-12-31 base period are returned.
 
     Parameters
     ----------
@@ -253,7 +254,7 @@ def load_zarr_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     ens_mean_path = os.path.join(base_folder, "ensemble_mean.zarr")
     ens_members_path = os.path.join(base_folder, "ensemble_members.zarr")
 
-    dataset_mean, dataset_members, dataset_instrumental, dataset_reference = load_dataset(
+    dataset_mean, dataset_members, dataset_instrumental, dataset_reference = _load_dataset(
             base_folder, TOT_ENSEMBLES_NUMBER, ignore_members)
     dataset_members_zarr = xr.open_zarr(ens_members_path)
 
