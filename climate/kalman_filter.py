@@ -197,9 +197,7 @@ class EnsembleKalmanFilter():
 
         # Loop over members.
         vector_members_updated = []
-        # for i in self.dataset_members.member_nr:
-        for i in range(1, 3):
-            print(i)
+        for i in self.dataset_members.member_nr:
             vector_member = self.dataset_members.get_window_vector(
                     time_begin, time_end, member_nr=i)
             vector_member_updated = (
