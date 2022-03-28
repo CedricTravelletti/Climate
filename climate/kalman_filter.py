@@ -172,7 +172,6 @@ class EnsembleKalmanFilter():
                         cov_pushfwd)
                     + data_cov)
         to_invert = to_invert.rechunk(to_invert.shape[0], to_invert.shape[1])
-        print(to_invert)
         sqrt = cholesky(to_invert, lower=True)
 
         kalman_gain = matmul(
@@ -458,3 +457,21 @@ class EnsembleKalmanFilterScatter():
             vector_members_updated.append(vector_member_updated)
 
         return vector_mean_updated, vector_members_updated
+
+    def approximate_cov(self, time_begin, time_end):
+        cov = self.get_ensemble_covariance(time_begin, time_end)
+        cov = self.dask_client.persist(cov)
+
+        u,s,v = da.linalg.svd_compressed(cov, 40)
+        cu = self.dask_client.persist(u)
+        cs = self.dask_client.persist(s)
+        cv = self.dask_client.persist(v)
+
+        # Lazy approximated matrix.
+        smat = da.diag(cs)
+        cov_approx = da.dot(cu, da.dot(smat, v))
+
+        approx_c = self.dask_client.compute(cov_approx[10000, :])
+        original_c = self.dask_client.compute(cov[10000, :])
+        
+        return approx_c, original_c
