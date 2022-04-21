@@ -3,6 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Personal ignore list.
+*.png
+*.pkl
+*.zarr
+*.c
+*.html
+dask-worker-space/
+
 # C extensions
 *.so
 
