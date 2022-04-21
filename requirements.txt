@@ -1,7 +1,15 @@
 cython
 numpy
+scipy
+scikit-learn
 pandas
+seaborn
 xarray
-dask
 netCDF4
 cartopy
+dask
+dask-jobqueue
+zarr
+notebook
+nb_conda_kernels
+jupyterlab

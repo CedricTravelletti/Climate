@@ -106,6 +106,9 @@ class EnsembleKalmanFilter():
 
         # Compute covariance matrix acrosss the different members.
         # Note that the below is a lazy operation (dask).
+
+        # TODO: Do we need result here? How can we clean the memory once 
+        # we have computed the covariance matrix?
         cov_matrix = cov(vector_members.result(), rowvar=False)
         return cov_matrix
 
