@@ -38,8 +38,16 @@ cd $BASE_FOLDER
 # Instrumental Data.
 mkdir -p "Instrumental"
 cd "./Instrumental/"
+# Get HadCRUT.
 wget "https://crudata.uea.ac.uk/cru/data/temperature/HadCRUT.4.6.0.0.median.nc"
-cd ..
+
+# Get Global Land surface Databank.
+mkdir -p "GLSD"
+cd "./GLSD/"
+wget ftp://ftp.ncdc.noaa.gov:21/pub/data/globaldatabank/monthly/stage3/recommended/results/recommended-netcdf_format.monthly.stage3.v1.1.1.20181009.tar.gz
+tar -zxvf recommended-netcdf_format.monthly.stage3.v1.1.1.20181009.tar.gz
+
+cd ../..
 
 # Reference Data.
 mkdir -p "Reference"
