@@ -52,7 +52,8 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
             datasets.append(
                     xr.open_mfdataset(current_folder + '*.nc', concat_dim="time", combine="nested",
                                   data_vars='minimal', coords='minimal',
-                                  compat='override'))
+                                  compat='override',
+                                  chunks={'time': 12}))
         
         dataset_members = xr.combine_by_coords(datasets)
     # Otherwise just return a dummy copy.
@@ -345,3 +346,30 @@ def rolling_mean(dataset, yr_delta_plus, yr_delta_minus):
                 - monthly_avg_mean).drop_vars('month'))
     dataset['anomaly'] = xr.concat(anomalies, dim='time')
     return dataset
+
+def generate_6month_windows(year_begin, year_end):
+    """ Generate strings defining 6 month window over a given 
+    span of years. 
+    This is to be used to provide parameters for the kalman filter update method.
+
+    Parameters
+    ----------
+    year_begin: int
+        Year at which to start.
+    year_end: int
+        Year at which to end (included).
+
+    Returns
+    -------
+    List[(string, string)]
+        List of window begin and end in string format. 
+        A window is defined by a tuple of the form (¹961-01-16', '1961-06-16').
+
+    """
+    windows = []
+    for year in range(year_begin, year_end + 1):
+        for month in [(01, 06), (07, 12)]:
+            window_begin = '{}-{}-16'.format(year, month[0])
+            window_end = '{}-{}-16'.format(year, month[1])
+            windows.append((window_begin, window_end))
+    return windows
