@@ -248,6 +248,7 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
         If set to yes, to not load the ensemble members. This can decrease the 
         loading time on systems with slow disks. Note that ensemble_members is 
         still returned, but it is just a copy of ensemble_mean.
+        Note also that ensemble_members_zarr is still returned.
 
     Returns
     -------
