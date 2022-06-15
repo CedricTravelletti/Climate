@@ -368,7 +368,7 @@ def generate_6month_windows(year_begin, year_end):
     """
     windows = []
     for year in range(year_begin, year_end + 1):
-        for month in [(01, 06), (07, 12)]:
+        for month in [('01', '06'), ('07', '12')]:
             window_begin = '{}-{}-16'.format(year, month[0])
             window_end = '{}-{}-16'.format(year, month[1])
             windows.append((window_begin, window_end))
