@@ -31,9 +31,13 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     ens_mean_folder = os.path.join(base_folder, "Ensembles/Means/")
     ens_mem_folder = os.path.join(base_folder, "Ensembles/Members/")
     instrumental_path = os.path.join(base_folder, "Instrumental/HadCRUT.4.6.0.0.median.nc")
+    # glsd_path = os.path.join(base_folder, "Instrumental/GLSD/netcdf_merged/")
+    glsd_path = os.path.join(base_folder, "Instrumental/GLSD/small_subset/")
     reference_path = os.path.join(base_folder, "Reference/cru_ts4.05.1901.2020.tmp.dat.nc")
 
     dataset_instrumental = xr.open_dataset(instrumental_path)
+    dataset_instrumental_glsd = xr.open_mfdataset(
+            glsd_path + '*.nc', concat_dim="time")
     dataset_reference = xr.open_dataset(reference_path)
 
     # Rename so dimensions names agree with the other datasets.
@@ -157,7 +161,7 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
 
     """
 
-    return dataset_mean, dataset_members, dataset_instrumental, dataset_reference
+    return dataset_mean, dataset_members, dataset_instrumental, dataset_instrumental_glsd, dataset_reference
 
 
 def match_datasets(base_dataset, dataset_tomatch):
@@ -259,12 +263,12 @@ def load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     ens_mean_path = os.path.join(base_folder, "ensemble_mean.zarr")
     ens_members_path = os.path.join(base_folder, "ensemble_members.zarr")
 
-    dataset_mean, dataset_members, dataset_instrumental, dataset_reference = _load_dataset(
+    dataset_mean, dataset_members, dataset_instrumental, dataset_instrumental_glsd, dataset_reference = _load_dataset(
             base_folder, TOT_ENSEMBLES_NUMBER, ignore_members)
     dataset_members_zarr = xr.open_zarr(ens_members_path)
 
     return (dataset_mean, dataset_members,
-            dataset_instrumental, dataset_reference,
+            dataset_instrumental, dataset_instrumental_glsd, dataset_reference,
             dataset_members_zarr)
 
 def add_year(dt64, yr_delta):
