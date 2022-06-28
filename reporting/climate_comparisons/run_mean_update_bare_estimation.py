@@ -31,11 +31,13 @@ if __name__ == "__main__":
         
     # The loading function returns 4 datasets: the ensemble members, the ensemble
     # mean, the instrumental data and the reference dataset.
+    # Note that ignore_members=True still loads the members as ZARR files, 
+    # so we are fine.
     TOT_ENSEMBLES_NUMBER = 30
-    (dataset_mean, dataset_members,
+    (dataset_mean, _,
             dataset_instrumental, dataset_reference,
             dataset_members_zarr)= load_dataset(
-            base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False)
+            base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=True)
     print("Loading done.")
     
     my_filter = EnsembleKalmanFilterScatter(dataset_mean, dataset_members_zarr,
