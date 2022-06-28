@@ -204,7 +204,7 @@ class EnsembleKalmanFilter():
             vector_member = self.dataset_members.get_window_vector(
                     time_begin, time_end, member_nr=i)
             vector_member_updated = (
-                    vector_member +
+                    vector_member -
                     matmul(kalman_gain_tilde, matmul(G, vector_member))
                     )
             print(vector_member_updated)
@@ -450,7 +450,7 @@ class EnsembleKalmanFilterScatter():
                 vector_member = self.dataset_members.get_window_vector(
                         time_begin, time_end, member_nr=i)
                 vector_member_updated = (
-                        vector_member +
+                        vector_member -
                         matmul(kalman_gain_tilde, matmul(G, vector_member))
                         )
                 vector_member_updated = self.dask_client.compute(vector_member_updated)
