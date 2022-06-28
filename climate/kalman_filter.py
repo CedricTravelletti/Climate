@@ -341,7 +341,7 @@ class EnsembleKalmanFilterScatter():
 
         return cov_matrix
 
-    def update_mean_window(self, time_begin, time_end, n_months, data_var):
+    def update_window(self, time_begin, time_end, n_months, data_var, update_members=True):
         """ Ensemble Kalman filter updating over an assimilation window.
 
         Parameters
@@ -361,6 +361,8 @@ class EnsembleKalmanFilterScatter():
             Will be automated in the future.
         data_var: float
             Variance of the observational noise.
+        update_members: bool, defaults to True
+            If False, then only update the mean of the ensemble.
 
         Returns
         -------
@@ -370,6 +372,7 @@ class EnsembleKalmanFilterScatter():
         members_updated: xarray.Dataset
             Dataset with updated members. Note that the data format is lazy. One should call 
             the corresponding .compute() method to trigger computing.
+            Only returns if update_members is set to True.
 
         """
         # First get the mean vector and data vector (stacked for the window).
@@ -383,7 +386,6 @@ class EnsembleKalmanFilterScatter():
         # We get back futures.
         vector_mean_fut = self.dask_client.scatter(vector_mean, broadcast=True)
         vector_data_fut = self.dask_client.scatter(vector_data, broadcast=True)
-
 
         # Get covariance matrix and forward.
         G = self.get_forward_for_window(time_begin, time_end, n_months)
@@ -427,7 +429,6 @@ class EnsembleKalmanFilterScatter():
 
         # Warning: have to make sure that the computations 
         # do not happen locally.
-
         vector_data = self.dask_client.persist(vector_data)
         prior_misfit = (
                 vector_data
@@ -441,23 +442,25 @@ class EnsembleKalmanFilterScatter():
                 mean_update_part
                 )
 
-
-        # Loop over members.
-        vector_members_updated = []
-        # for i in self.dataset_members.member_nr:
-        for i in range(30):
-            vector_member = self.dataset_members.get_window_vector(
-                    time_begin, time_end, member_nr=i)
-            vector_member_updated = (
-                    vector_member +
-                    matmul(kalman_gain_tilde, matmul(G, vector_member))
-                    )
-            vector_member_updated = self.dask_client.compute(vector_member_updated)
-
-            # member_updated = vector_member_updated.unstack('stacked_dim')
-            vector_members_updated.append(vector_member_updated)
-
-        return vector_mean_updated, vector_members_updated
+        if update_members is True:
+            # Loop over members.
+            vector_members_updated = []
+            # for i in self.dataset_members.member_nr:
+            for i in range(30):
+                vector_member = self.dataset_members.get_window_vector(
+                        time_begin, time_end, member_nr=i)
+                vector_member_updated = (
+                        vector_member +
+                        matmul(kalman_gain_tilde, matmul(G, vector_member))
+                        )
+                vector_member_updated = self.dask_client.compute(vector_member_updated)
+    
+                # member_updated = vector_member_updated.unstack('stacked_dim')
+                vector_members_updated.append(vector_member_updated)
+    
+            return vector_mean_updated, vector_members_updated
+        else:
+            return vector_mean_updated
 
     def approximate_cov(self, time_begin, time_end):
         cov = self.get_ensemble_covariance(time_begin, time_end)
