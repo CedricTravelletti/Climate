@@ -460,6 +460,9 @@ class EnsembleKalmanFilterScatter():
         return vector_mean_updated, vector_members_updated
 
     def approximate_cov(self, time_begin, time_end):
+        """ Approximate covariance using truncated SVD. 
+
+        """
         cov = self.get_ensemble_covariance(time_begin, time_end)
         cov = self.dask_client.persist(cov)
 
