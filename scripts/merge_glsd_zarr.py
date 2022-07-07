@@ -13,6 +13,7 @@ from dask_jobqueue import SLURMCluster
 
 # merged_glsd_path = "/home/cedric/PHD/Dev/Climate/Data/Instrumental/GLSD/zarr/"
 merged_glsd_path = "/storage/homefs/ct19x463/Dev/Climate/Data/Instrumental/GLSD/zarr/"
+out_path = "/storage/homefs/ct19x463/Dev/Climate/Data/Instrumental/GLSD/"
 
 
 if __name__ == "__main__":
@@ -28,6 +29,7 @@ if __name__ == "__main__":
     
     path_list = glob.glob(merged_glsd_path + "*.zarr")
     merged_ds = xr.open_zarr(path_list[0])
+    print(path_list[0])
     for i, f in enumerate(path_list[1:]):
         print(i)
         print(f)
@@ -35,3 +37,9 @@ if __name__ == "__main__":
         merged_ds = xr.merge([merged_ds, ds], compat='no_conflicts')
         ds.close()
         del(ds)
+        if i % 5 == 0:
+            # Rechunk befor saving.
+            merged_ds['surface_average_temperature'] = merged_ds.surface_average_temperature.chunk("auto")
+            merged_ds.to_zarr(os.path.join(out_path, "glsd_full_merge.zarr"), mode="w")
+    merged_ds.to_zarr(os.path.join(out_path, "glsd_full_merge.zarr"), mode="w")
+    merged_ds.close()

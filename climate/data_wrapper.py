@@ -178,5 +178,5 @@ class ZarrDatasetWrapper():
         data_holder = data_holder.anomaly.stack(
                         stacked_dim=('time', 'latitude', 'longitude'))
         unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
-        unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
+        # unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
         return unstacked_data
