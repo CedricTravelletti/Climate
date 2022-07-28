@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import xarray as xr
 
@@ -142,6 +143,14 @@ class ZarrDatasetWrapper():
                 * unstacked_data_holder.longitude.shape[0])
         self.timestamps = unstacked_data_holder.time.values
 
+    @property
+    def latitudes(self):
+        return self.unstacked_data_holder.latitude.values
+
+    @property
+    def longitudes(self):
+        return self.unstacked_data_holder.longitude.values
+
     def get_window_vector(self, time_begin, time_end, member_nr=None):
         time_index_begin = self.get_time_index(time_begin)
         time_index_end = self.get_time_index(time_end)
@@ -180,3 +189,39 @@ class ZarrDatasetWrapper():
         unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
         # unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
         return unstacked_data
+
+    def get_region_flat_inds(self, lat_min, lat_max, lon_min, lon_max):
+        """ Selects indices (in flattened array) of a square region.
+
+        Parameters
+        ----------
+        lat_min: float
+            Minimal latitude of the square.
+        lat_max: float
+            Maximal latitude of the square.
+        lon_min: float
+            Minimal longitude of the square.
+        lon_max: float
+            Maximal longitude of the square.
+
+        Returns
+        -------
+        array [int]
+            Array of (flat) indices corresponding to the region of interest.
+
+        """
+        lat_inds = np.where((self.latitudes >= lat_min) & (self.latitudes <= lat_max))[0]
+        lon_inds = np.where((self.longitudes >= lon_min) & (self.longitudes <= lon_max))[0]
+
+        # Check if we have no points.
+        if lat_inds.shape[0] <= 0 or lon_inds.shape[0] <= 0:
+            return np.array([[]])
+
+        # Produce all combinations of indices.
+        inds_prod = np.array(list(itertools.product(lat_inds, lon_inds)))
+
+        # Return flattend indices.
+        flat_inds = np.ravel_multi_index((inds_prod[:, 0], inds_prod[:, 1]),
+                (self.latitudes.shape[0],
+                    self.longitudes.shape[0]))
+        return flat_inds
