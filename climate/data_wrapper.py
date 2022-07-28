@@ -177,18 +177,36 @@ class ZarrDatasetWrapper():
     def member_nr(self):
         return self.dataset_members.member_nr.values
 
-    def unstack_window_vector(self, window_vector):
-        # Find the corresponding time window.
-        time_begin = window_vector.time.values.min()
-        time_end = window_vector.time.values.max()
+    def unstack_window_vector(self, window_vector, time='1961-01-16'):
+        # If the data is just an array, unstack manually.
+        if isinstance(cov_Iceland_computed, np.ndarray):
+            time_begin = time
+            time_end = time
+            data_holder = self.dataset_members.unstacked_data_holder.sel(time=time).stack(
+                    stacked_dim=('latitude', 'longitude'))
+            # Put data in the anomaly variable.
+            data_holder.anomaly.values = window_vector
+            return data_holder
+        # Otherwise if we have a DataArray, unpack automatically.
+        else:
+            # Find the corresponding time window.
+            time_begin = window_vector.time.values.min()
+            time_end = window_vector.time.values.max()
+    
+            # Copy the spatial structure from a dummy dataset.
+            data_holder = self.unstacked_data_holder.sel(time=slice(time_begin, time_end))
 
-        # Copy the spatial structure from a dummy dataset.
-        data_holder = self.unstacked_data_holder.sel(time=slice(time_begin, time_end))
-        data_holder = data_holder.anomaly.stack(
-                        stacked_dim=('time', 'latitude', 'longitude'))
-        unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
-        # unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
-        return unstacked_data
+            # Have to proceed differently if there is only one time.
+            if time_begin == time_end:
+                data_holder = data_holder.anomaly.stack(
+                            stacked_dim=('latitude', 'longitude'))
+            else:
+                data_holder = data_holder.anomaly.stack(
+                            stacked_dim=('time', 'latitude', 'longitude'))
+
+            unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
+            # unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
+            return unstacked_data
 
     def get_region_flat_inds(self, lat_min, lat_max, lon_min, lon_max):
         """ Selects indices (in flattened array) of a square region.
