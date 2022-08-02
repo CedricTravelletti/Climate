@@ -182,7 +182,7 @@ class ZarrDatasetWrapper():
         if isinstance(window_vector, np.ndarray):
             time_begin = time
             time_end = time
-            data_holder = self.dataset_members.unstacked_data_holder.sel(time=time).stack(
+            data_holder = self.unstacked_data_holder.sel(time=time).stack(
                     stacked_dim=('latitude', 'longitude'))
             # Put data in the anomaly variable.
             data_holder.anomaly.values = window_vector
