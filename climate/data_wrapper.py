@@ -179,7 +179,7 @@ class ZarrDatasetWrapper():
 
     def unstack_window_vector(self, window_vector, time='1961-01-16'):
         # If the data is just an array, unstack manually.
-        if isinstance(cov_Iceland_computed, np.ndarray):
+        if isinstance(window_vector, np.ndarray):
             time_begin = time
             time_end = time
             data_holder = self.dataset_members.unstacked_data_holder.sel(time=time).stack(
