@@ -183,10 +183,10 @@ class ZarrDatasetWrapper():
             time_begin = time
             time_end = time
             data_holder = self.unstacked_data_holder.sel(time=time).stack(
-                    stacked_dim=('latitude', 'longitude'))
+                    stacked_dim=('latitude', 'longitude')).copy()
             # Put data in the anomaly variable.
             data_holder.anomaly.values = window_vector
-            return data_holder
+            return data_holder.unstack('stacked_dim')
         # Otherwise if we have a DataArray, unpack automatically.
         else:
             # Find the corresponding time window.
