@@ -384,3 +384,28 @@ def generate_6month_windows(year_begin, year_end):
             window_end = '{}-{}-16'.format(year, month[1])
             windows.append((window_begin, window_end))
     return windows
+
+def generate_monthly_dates(year_begin, year_end):
+    """ Generate strings corresponding to monthly dates (month middle) 
+    for a given span of years.
+
+    Parameters
+    ----------
+    year_begin: int
+        Year at which to start.
+    year_end: int
+        Year at which to end (included).
+
+    Returns
+    -------
+    List[string]
+        List of dates string format. 
+        A date is of the form '1961-06-16'.
+
+    """
+    dates = []
+    for year in range(year_begin, year_end + 1):
+        for month in ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']:
+            date = '{}-{}-16'.format(year, month)
+            dates.append(date)
+    return dates
