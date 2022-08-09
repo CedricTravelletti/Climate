@@ -151,15 +151,15 @@ class ZarrDatasetWrapper():
     def longitudes(self):
         return self.unstacked_data_holder.longitude.values
 
-    def get_window_vector(self, time_begin, time_end, member_nr=None):
+    def get_window_vector(self, time_begin, time_end, member_nr=None, variable='difference'):
         time_index_begin = self.get_time_index(time_begin)
         time_index_end = self.get_time_index(time_end)
 
         if member_nr is not None:
-            vector_members = self.dataset_members.difference[member_nr,
+            vector_members = self.dataset_members[variable][member_nr,
                 time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
         else: 
-            vector_members = self.dataset_members.difference[:,
+            vector_members = self.dataset_members[variable][:,
                 time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
         return vector_members
 
