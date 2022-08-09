@@ -93,13 +93,13 @@ class EnsembleKalmanFilter():
 
         return G_nonan
 
-    def get_ensemble_covariance(self, time_begin, time_end):
+    def get_ensemble_covariance(self, time_begin, time_end, variable='difference'):
         """ Get the (lazy) covariance matrix for a given time window. 
         Times are given by the index in the list of the timestamps of the dataset.
 
         """
         # Get the stacked window vectors for each ensemble member.
-        vector_members = self.dataset_members.get_window_vector(time_begin, time_end)
+        vector_members = self.dataset_members.get_window_vector(time_begin, time_end, variable=variable)
 
         # Scatter everywhere so easier to compute covariance matrix.
         vector_members = self.dask_client.scatter(vector_members, broadcast=True)
@@ -327,13 +327,13 @@ class EnsembleKalmanFilterScatter():
 
         return G_nonan
 
-    def get_ensemble_covariance(self, time_begin, time_end):
+    def get_ensemble_covariance(self, time_begin, time_end, variable='difference'):
         """ Get the (lazy) covariance matrix for a given time window. 
         Times are given by the index in the list of the timestamps of the dataset.
 
         """
         # Get the stacked window vectors for each ensemble member.
-        vector_members = self.dataset_members.get_window_vector(time_begin, time_end)
+        vector_members = self.dataset_members.get_window_vector(time_begin, time_end, variable=variable)
 
         # Compute covariance matrix acrosss the different members.
         # Note that the below is a lazy operation (dask).
