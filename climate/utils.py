@@ -8,8 +8,8 @@ import xarray as xr
 from sklearn.neighbors import BallTree
 
 
-def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
-    """ Helper function for dataset loading. 
+def load_bare_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
+    """ Just load the bare datasets, as given by the climate group.
 
     Parameters
     ----------
@@ -63,6 +63,34 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     # Otherwise just return a dummy copy.
     else: dataset_members = dataset_mean.copy(deep=True)
 
+    return dataset_mean, dataset_members, dataset_instrumental, dataset_reference
+
+
+
+
+def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
+    """ Helper function for dataset loading. 
+
+    Parameters
+    ----------
+    base_folder: string
+        Path to the root folder for the data. Should contain the Ensembles/ and
+        Instrumental/ folder.
+    TOT_ENSEMBLES_NUMBER: int
+        Only load the first TOT_ENSEMBLES_NUMBER ensemble members.
+    ignore_members: bool (default=False)
+        If set to yes, to not load the ensemble members. This can decrease the 
+        loading time on systems with slow disks. Note that ensemble_members is 
+        still returned, but it is just a copy of ensemble_mean.
+
+    Returns
+    -------
+    xarray.Dataset: dataset_mean, dataset_members, dataset_instrumental, dataset_reference
+
+    """
+    # Start by just loading the bare datasets.
+    dataset_mean, dataset_members, dataset_instrumental, dataset_reference = load_bare_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members)
+
     # --------------
     # POSTPROCESSING
     # --------------
@@ -72,14 +100,14 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
             'lagrangian_tendency_of_air_pressure',
             'northward_wind',
             'eastward_wind', 'geopotential_height',
-            'air_pressure_at_sea_level',
+            # 'air_pressure_at_sea_level',
             'total precipitation',
             'pressure_level_wind', 'pressure_level_gph'])
     dataset_members = dataset_members.drop(['cycfreq', 'blocks',
             'lagrangian_tendency_of_air_pressure',
             'northward_wind',
             'eastward_wind', 'geopotential_height',
-            'air_pressure_at_sea_level',
+            # 'air_pressure_at_sea_level',
             'total precipitation',
             'pressure_level_wind', 'pressure_level_gph'])
 
@@ -165,20 +193,49 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
         # dataset_instrumental_glsd,
         dataset_reference)
 
+def match_vectors_indices(base_vector, vector_to_match):
+    """" Given two stacked datasets (vectors), for each element in the dataset_tomatch,
+    find the index of the element in the base dataset that is closest.
 
-def match_datasets(base_dataset, dataset_tomatch):
-    """" Match two datasets defined on different grid.
-
-    Given a base dataset and a dataset to be matched, find for each point in
-    the dataset to mathc the closest cell in the base dataset and return its
-    index.
+    Note that the base dataset should contain only one element at each spatial locaiton, 
+    so that the matched index is unique.
 
     Parameters
     ----------
-    base_dataset: xarray.Dataset
-    dataset_tomatch: xarray.Dataset
+    base_vector: xarray.DataArray
+        Stacked dataset.
+    vector_to_match: xarray.DataArray
+        Stacked dataset.
+
+    Returns
+    -------
+    Array[int] (vector_to_match.shape[0])
+        Indices in the base dataset of closest element for each 
+        element of the dataset_tomatch.
 
     """
+    # Convert to radians.
+    lat_rad = np.deg2rad(base_vector.latitude.values.astype(np.float32))
+    lon_rad = np.deg2rad(base_vector.longitude.values.astype(np.float32))
+
+    # Build a ball tree to make nearest neighbor queries faster.
+    ball = BallTree(np.vstack([lat_rad, lon_rad]).T, metric='haversine')
+
+    # Define grid to be matched.
+    lon_tomatch = np.deg2rad(vector_to_match.longitude.values.astype(np.float32))
+    lat_tomatch = np.deg2rad(vector_to_match.latitude.values.astype(np.float32))
+    coarse_grid_list = np.vstack([lat_tomatch.T, lon_tomatch.T]).T
+
+    distances, index_array_1d = ball.query(coarse_grid_list, k=1)
+    
+    # Convert back to kilometers.
+    distances_km = 6371 * distances
+    # Sanity check.
+    print("Maximal distance to matched point: {} km.".format(np.max(distances_km)))
+
+    return index_array_1d.squeeze()
+
+def match_datasets(base_dataset, dataset_tomatch):
     # Define original lat-lon grid
     # Creates new columns converting coordinate degrees to radians.
     lon_rad = np.deg2rad(base_dataset.longitude.values.astype(np.float32))
@@ -333,7 +390,7 @@ def rolling_mean(dataset, yr_delta_plus, yr_delta_minus):
     """
     # First need to duplicate the variable so it already has a 
     # time component. 
-    dataset['anomaly'] = dataset['temperature']
+    dataset['anomaly'] = dataset['temperature'].copy()
 
     # Find the first and last year in the dataset.
     yr_min = get_year(dataset.time.values.min())
