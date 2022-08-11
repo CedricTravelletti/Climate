@@ -75,7 +75,7 @@ class DatasetWrapper():
                             })
         return ds_out
 
-    def get_window_vector(self, time_begin, time_end, indexers=None):
+    def get_window_vector(self, time_begin, time_end, indexers=None, variable='difference'):
         """ Given a time window, returns the stacked vector for the data in
         that period.
 
@@ -106,7 +106,7 @@ class DatasetWrapper():
         """
         # The data is re-chunked after stacking to make sure the subsequent
         # computations fit in memory.
-        stacked_data = self.dataset.anomaly.sel(indexers).sel(
+        stacked_data = self.dataset.anomaly.sel(indexers)[variable].sel(
                 time=slice(time_begin, time_end)).stack(
                         stacked_dim=('time', 'latitude', 'longitude')).chunk(
                                 {'stacked_dim': self.chunk_size})
