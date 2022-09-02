@@ -138,8 +138,8 @@ def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     # First convert everything to datetime.
     # Subset to valid times. This is because np.datetime only allows dates back to 1687,
     # but on the other hand cftime does not support the full set of pandas slicing features.
-    dataset_mean = dataset_mean.sel(time=slice("1900-01", "2001-12"))
-    dataset_members = dataset_members.sel(time=slice("1900-01", "2001-12"))
+    dataset_mean = dataset_mean.sel(time=slice("1800-01", "2001-12"))
+    dataset_members = dataset_members.sel(time=slice("1800-01", "2001-12"))
 
     dataset_mean['time'] = dataset_mean.indexes['time'].to_datetimeindex()
     dataset_members['time'] = dataset_members.indexes['time'].to_datetimeindex()
