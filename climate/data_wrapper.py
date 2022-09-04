@@ -75,7 +75,7 @@ class DatasetWrapper():
                             })
         return ds_out
 
-    def get_window_vector(self, time_begin, time_end, indexers=None, variable='difference'):
+    def get_window_vector(self, time_begin, time_end, indexers=None, variable='anomaly'):
         """ Given a time window, returns the stacked vector for the data in
         that period.
 
@@ -106,28 +106,47 @@ class DatasetWrapper():
         """
         # The data is re-chunked after stacking to make sure the subsequent
         # computations fit in memory.
-        stacked_data = self.dataset.anomaly.sel(indexers)[variable].sel(
+        stacked_data = self.dataset[variable].sel(indexers).sel(
                 time=slice(time_begin, time_end)).stack(
                         stacked_dim=('time', 'latitude', 'longitude')).chunk(
                                 {'stacked_dim': self.chunk_size})
         return stacked_data
 
-    def unstack_window_vector(self, window_vector):
+    def unstack_window_vector(self, window_vector, variable_name, time='1961-01-16'):
         """ Given a stacked vector (as produced by get_window_vector, but in
         numpy format), unstack it into a dataset of the original dimension.
 
         """
-        # Find the corresponding time window.
-        time_begin = window_vector.time.values.min()
-        time_end = window_vector.time.values.max()
+        # If the data is just an array, unstack manually.
+        if isinstance(window_vector, np.ndarray):
+            time_begin = time
+            time_end = time
+            data_holder = self.dataset.anomaly.sel(time=time).stack(
+                    stacked_dim=('latitude', 'longitude')).copy()
+            # Put data in the anomaly variable.
+            data_holder.values = window_vector.reshape(-1)
+            unstacked_data = data_holder.unstack('stacked_dim')
+            unstacked_data = unstacked_data.rename(variable_name)
+            return unstacked_data
+        else:
+            # Find the corresponding time window.
+            time_begin = window_vector.time.values.min()
+            time_end = window_vector.time.values.max()
+    
+            # Copy the spatial structure from a dummy dataset.
+            data_holder = self.dataset.sel(time=slice(time_begin, time_end))
 
-        # Copy the spatial structure from a dummy dataset.
-        data_holder = self.dataset.sel(time=slice(time_begin, time_end))
-        data_holder = data_holder.anomaly.stack(
-                        stacked_dim=('time', 'latitude', 'longitude'))
-        unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
+            # Have to proceed differently if there is only one time.
+            if time_begin == time_end:
+                data_holder = data_holder.anomaly.stack(
+                            stacked_dim=('latitude', 'longitude'))
+            else:
+                data_holder = data_holder.anomaly.stack(
+                            stacked_dim=('time', 'latitude', 'longitude'))
 
-        return unstacked_data
+            unstacked_data = data_holder.copy(data=window_vector.reshape(-1)).unstack('stacked_dim')
+            unstacked_data = unstacked_data.rename({'anomaly': variable_name})
+            return unstacked_data
 
 
 class ZarrDatasetWrapper():
@@ -177,16 +196,18 @@ class ZarrDatasetWrapper():
     def member_nr(self):
         return self.dataset_members.member_nr.values
 
-    def unstack_window_vector(self, window_vector, time='1961-01-16'):
+    def unstack_window_vector(self, window_vector, variable_name, time='1961-01-16'):
         # If the data is just an array, unstack manually.
         if isinstance(window_vector, np.ndarray):
             time_begin = time
             time_end = time
-            data_holder = self.unstacked_data_holder.sel(time=time).stack(
+            data_holder = self.unstacked_data_holder.anomaly.sel(time=time).stack(
                     stacked_dim=('latitude', 'longitude')).copy()
             # Put data in the anomaly variable.
-            data_holder.anomaly.values = window_vector
-            return data_holder.unstack('stacked_dim')
+            data_holder.values = window_vector.reshape(1, -1)
+            unstacked_data = data_holder.unstack('stacked_dim')
+            unstacked_data = unstacked_data.rename(variable_name)
+            return unstacked_data
         # Otherwise if we have a DataArray, unpack automatically.
         else:
             # Find the corresponding time window.
@@ -205,7 +226,7 @@ class ZarrDatasetWrapper():
                             stacked_dim=('time', 'latitude', 'longitude'))
 
             unstacked_data = data_holder.copy(data=window_vector).unstack('stacked_dim')
-            # unstacked_data = unstacked_data.rename({'anomaly': 'difference'})
+            unstacked_data = unstacked_data.rename({'anomaly': variable_name})
             return unstacked_data
 
     def get_region_flat_inds(self, lat_min, lat_max, lon_min, lon_max):
