@@ -39,7 +39,7 @@ class EnsembleKalmanFilter():
         # instrumental dataset and the other ones).
         self.G_base = build_base_forward(dataset_mean,
                 dataset_instrumental)
-    
+
     def get_forward_for_window(self, time_begin, time_end, n_months):
         """ Computes the forward operator for a given time window.
 
