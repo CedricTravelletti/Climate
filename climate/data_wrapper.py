@@ -1,3 +1,6 @@
+import re
+import os
+import glob
 import itertools
 import numpy as np
 import xarray as xr
@@ -201,13 +204,18 @@ class ZarrDatasetWrapper():
         if isinstance(window_vector, np.ndarray):
             time_begin = time
             time_end = time
-            data_holder = self.unstacked_data_holder.anomaly.sel(time=time).stack(
+            # Loop over ensemble members.
+            unstacked_members = []
+            for i in range(window_vector.shape[0]):
+                data_holder = self.unstacked_data_holder.anomaly.sel(time=time).stack(
                     stacked_dim=('latitude', 'longitude')).copy()
-            # Put data in the anomaly variable.
-            data_holder.values = window_vector.reshape(1, -1)
-            unstacked_data = data_holder.unstack('stacked_dim')
-            unstacked_data = unstacked_data.rename(variable_name)
-            return unstacked_data
+                # Put data in the anomaly variable.
+                data_holder.values = window_vector[i, :].reshape(-1)
+                unstacked_data = data_holder.unstack('stacked_dim')
+                unstacked_data = unstacked_data.rename(variable_name)
+                unstacked_members.append(unstacked_data.copy())
+            unstacked_members = xr.concat(unstacked_members, dim='member_nr')
+            return unstacked_members
         # Otherwise if we have a DataArray, unpack automatically.
         else:
             # Find the corresponding time window.
@@ -264,3 +272,38 @@ class ZarrDatasetWrapper():
                 (self.latitudes.shape[0],
                     self.longitudes.shape[0]))
         return flat_inds
+
+
+class StationDataset:
+    def __init__(self, base_folder):
+        station_files = glob.glob(
+                os.path.join(base_folder, "CRUTEM/station_files/*/*.nc"))
+        self.station_datasets = []
+        for i, f in enumerate(station_files):
+            print(i)
+            self.station_datasets.append(xr.open_dataset(f))
+
+    def get_station_data(self, year, month, day):
+        # Parse to standard date format.
+        if month == "02":
+            day = "15"
+        results = []
+        for ds in self.station_datasets:
+            try:
+                tmp1 = ds.tas.sel(time="{}-{}-{}".format(year, month, day))
+                # Get climatology for corresponding month.
+                month_index = int(month) - 1
+                tmp2 = ds.tas_climatology_normal.isel(climatology_normal_time=month_index)
+                try: temp, anomaly = tmp1.values[0], tmp2
+                except:
+                    print(tmp1.values)
+                    print(year)
+                    print(month)
+                    print(day)
+
+                if np.isnan(temp) or np.isnan(anomaly):
+                    continue
+                results.append([temp, anomaly, tmp1.latitude.values, tmp1.longitude.values])
+            except KeyError:
+                pass
+        return np.array(results)
