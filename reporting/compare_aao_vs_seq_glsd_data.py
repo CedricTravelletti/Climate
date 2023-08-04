@@ -25,11 +25,10 @@ from climate.kalman_filter import EnsembleKalmanFilterScatter
 from dask.distributed import Client, wait, progress                             
 import diesel as ds                                                             
 from diesel.scoring import compute_RE_score, compute_CRPS, compute_energy_score, compute_RMSE
-from diesel.estimation import localize_covariance 
 
 
 base_folder = "/storage/homefs/ct19x463/Dev/Climate/Data/"
-results_folder = "/storage/homefs/ct19x463/Dev/Climate/reporting/all_at_once_vs_sequential_78_80/"
+results_folder = "/storage/homefs/ct19x463/Dev/Climate/reporting/all_at_once_vs_sequential/all_at_once_vs_sequential_60_61/"
 
 
 # Build Cluster
@@ -42,6 +41,8 @@ client = Client(cluster)
 # Note that this is necessary before importing the EnsembleKalmanFilter module, so that the module is aware of the cluster.
 __builtins__.CLIENT = client                                                
 from diesel.kalman_filtering import EnsembleKalmanFilter 
+from diesel.estimation import localize_covariance # Note that these two need to be imported 
+# after the client has been created, since they need to know about the globals.
 
 # Load the data.
 TOT_ENSEMBLES_NUMBER = 30
@@ -154,7 +155,7 @@ def run_single_month(assimilation_date):
 
 # Run for several years.
 updated_means_aao, updated_means_seq, prior_means, references = [], [], [], [] 
-for year in range(1978, 1981):
+for year in range(1960, 1962):
     for month in range(1, 13):
         month_str = str(month).zfill(2)
         assimilation_date = str(year) + '-' + month_str + '-16'
