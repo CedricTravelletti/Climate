@@ -132,9 +132,13 @@ class DatasetWrapper():
             unstacked_data = unstacked_data.rename(variable_name)
             return unstacked_data
         else:
-            # Find the corresponding time window.
-            time_begin = window_vector.time.values.min()
-            time_end = window_vector.time.values.max()
+            if time is not None:
+                time_begin = time
+                time_end = time
+            else:
+                # Find the corresponding time window.
+                time_begin = window_vector.time.values.min()
+                time_end = window_vector.time.values.max()
     
             # Copy the spatial structure from a dummy dataset.
             data_holder = self.dataset.sel(time=slice(time_begin, time_end))
