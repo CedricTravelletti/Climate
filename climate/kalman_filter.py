@@ -259,14 +259,19 @@ class EnsembleKalmanFilterScatter():
     """
     def __init__(self, dataset_mean, dataset_members_zarr, dataset_instrumental,
             dask_client,
-            chunk_size=1000):
+            chunk_size=1000, is_zarr=True):
         self.dask_client = dask_client
         self.chunk_size = chunk_size
 
         # Wrap the datasets.
         self.dataset_mean = DatasetWrapper(dataset_mean, chunk_size)
-        self.dataset_members = ZarrDatasetWrapper(dataset_members_zarr, 
-                dataset_mean.copy(deep=True))
+
+        # Choose wrapper accordingly.
+        if is_zarr:
+            self.dataset_members = ZarrDatasetWrapper(dataset_members_zarr, 
+                    dataset_mean.copy(deep=True))
+        else: self.dataset_members = DatasetWrapper(dataset_members_zarr)
+
         self.dataset_instrumental = DatasetWrapper(dataset_instrumental, chunk_size)
 
         # Get the base forward (the matrix making the translation between the
