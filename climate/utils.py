@@ -66,8 +66,6 @@ def load_bare_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     return dataset_mean, dataset_members, dataset_instrumental, dataset_reference
 
 
-
-
 def _load_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members=False):
     """ Helper function for dataset loading. 
 
@@ -466,3 +464,78 @@ def generate_monthly_dates(year_begin, year_end):
             date = '{}-{}-16'.format(year, month)
             dates.append(date)
     return dates
+
+
+def load_bare_highres_dataset(base_folder, TOT_ENSEMBLES_NUMBER=5, ignore_members=False):
+    """ Just load the bare datasets, as given by the climate group.
+
+    Parameters
+    ----------
+    base_folder: string
+        Path to the root folder for the data. Should contain the Ensembles/ and
+        Instrumental/ folder.
+    TOT_ENSEMBLES_NUMBER: int
+        Only load the first TOT_ENSEMBLES_NUMBER ensemble members.
+    ignore_members: bool (default=False)
+        If set to yes, to not load the ensemble members. This can decrease the 
+        loading time on systems with slow disks. Note that ensemble_members is 
+        still returned, but it is just a copy of ensemble_mean.
+
+    Returns
+    -------
+    xarray.Dataset: dataset_mean, dataset_members, dataset_instrumental, dataset_reference
+
+    """
+    highres_folder = os.path.join(base_folder, "high_res/simulations/")
+    mean_path = os.path.join(highres_folder, "ModE-Simhires_ensmean_temp2_abs_1420-2009.nc")
+    dataset_mean_highres = xr.open_dataset(mean_path)
+
+    # Loop over members folders and merge.
+    if ignore_members is False:
+        datasets = []
+        for i in range(1, int(TOT_ENSEMBLES_NUMBER) + 1):
+            member_path = os.path.join(highres_folder, "ModE-Simhires_m00{}_temp2_abs_1420-2009.nc".format(i))
+            datasets.append(xr.open_dataset(member_path).expand_dims({'member_nr': [i]}))
+        
+        dataset_members_highres = xr.combine_by_coords(datasets, combine_attrs='drop')
+    # Otherwise just return a dummy copy.
+    else: dataset_members_highres = dataset_mean_highres.copy(deep=True)
+
+    return dataset_mean_highres, dataset_members_highres
+
+def load_and_preprocess_highres_dataset(base_folder, TOT_ENSEMBLES_NUMBER=5, ignore_members=False):
+    # First load.
+    dataset_mean_highres, dataset_members_highres = load_bare_highres_dataset(base_folder, TOT_ENSEMBLES_NUMBER, ignore_members)
+
+    # Rename so dimensions names agree with the other datasets.
+    dataset_mean_highres = dataset_mean_highres.rename({'lat': 'latitude', 'lon': 'longitude'})
+    dataset_members_highres = dataset_members_highres.rename({'lat': 'latitude', 'lon': 'longitude'})
+    dataset_mean_highres = dataset_mean_highres.rename(
+            {'temp2': 'temperature'})
+    dataset_members_highres = dataset_members_highres.rename(
+            {'temp2': 'temperature'})
+
+    # First convert everything to datetime.
+    # Subset to valid times. This is because np.datetime only allows dates back to 1687,
+    # but on the other hand cftime does not support the full set of pandas slicing features.
+    dataset_mean_highres = dataset_mean_highres.sel(time=slice("1800-01", "2001-12"))
+    dataset_members_highres = dataset_members_highres.sel(time=slice("1800-01", "2001-12"))
+
+    dataset_mean_highres['time'] = dataset_mean_highres.indexes['time'].to_datetimeindex()
+    dataset_members_highres['time'] = dataset_members_highres.indexes['time'].to_datetimeindex()
+
+    # Match time index: except for the instrumental dataset, all are gridded
+    # monthly, with index that falls on the middle of the month. Problem is
+    # that February (middle is 15 or 16) is treated differently across the
+    # datasets.
+
+    # First get the low resolution dataset.
+    (dataset_mean_lowres, _, _, _, _)= load_dataset(base_folder, TOT_ENSEMBLES_NUMBER=1, ignore_members=True)
+
+    # Use the index from the low resolution mean dataset, matching to the nearest timestamp.
+    dataset_mean_highres = dataset_mean_highres.reindex(
+            time=dataset_mean_lowres.time.values, method='nearest')
+    dataset_members_highres = dataset_members_highres.reindex(
+            time=dataset_mean_lowres.time.values, method='nearest')
+
+    return dataset_mean_highres, dataset_members_highres
