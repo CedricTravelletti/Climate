@@ -78,7 +78,7 @@ class DatasetWrapper():
                             })
         return ds_out
 
-    def get_window_vector(self, time_begin, time_end, indexers=None, variable='anomaly'):
+    def get_window_vector(self, time_begin, time_end, indexers=None, variable_name='anomaly'):
         """ Given a time window, returns the stacked vector for the data in
         that period.
 
@@ -109,7 +109,7 @@ class DatasetWrapper():
         """
         # The data is re-chunked after stacking to make sure the subsequent
         # computations fit in memory.
-        stacked_data = self.dataset[variable].sel(indexers).sel(
+        stacked_data = self.dataset[variable_name].sel(indexers).sel(
                 time=slice(time_begin, time_end)).stack(
                         stacked_dim=('time', 'latitude', 'longitude')).chunk(
                                 {'stacked_dim': self.chunk_size})
@@ -124,13 +124,40 @@ class DatasetWrapper():
         if isinstance(window_vector, np.ndarray):
             time_begin = time
             time_end = time
+
+            # TODO: Careful here, we have modified the variable_name part 
+            # to make it compatible with the highres dataset (where there is no 
+            # anomaly variable). Have to check compatibility.
+            data_holder = self.dataset[variable_name].sel(time=time).stack(
+                    stacked_dim=('latitude', 'longitude')).copy()
+            """
             data_holder = self.dataset.anomaly.sel(time=time).stack(
                     stacked_dim=('latitude', 'longitude')).copy()
-            # Put data in the anomaly variable.
-            data_holder.values = window_vector.reshape(-1)
-            unstacked_data = data_holder.unstack('stacked_dim')
-            unstacked_data = unstacked_data.rename(variable_name)
-            return unstacked_data
+            """
+
+            # Perform differently if we get a single vector or and ensemble.
+            if len(window_vector.shape) < 2:
+                data_holder.values = window_vector.reshape(-1)
+                unstacked_data = data_holder.unstack('stacked_dim')
+                unstacked_data = unstacked_data.rename(variable_name)
+                return unstacked_data
+            else:
+                """
+                # Loop over ensemble members.
+                unstacked_members = []
+                for i in range(window_vector.shape[0]):
+                    # Put data in the anomaly variable.
+                    data_holder.values = window_vector[i, :].reshape(-1)
+                    unstacked_data = data_holder.unstack('stacked_dim')
+                    unstacked_data = unstacked_data.rename(variable_name)
+                    unstacked_members.append(unstacked_data.copy())
+                unstacked_members = xr.concat(unstacked_members, dim='member_nr')
+                """
+                # TODO: Try non loop version.
+                data_holder.values = window_vector
+                unstacked_data = data_holder.unstack('stacked_dim')
+                unstacked_data = unstacked_data.rename(variable_name)
+                return unstacked_data
         else:
             if time is not None:
                 time_begin = time
@@ -145,14 +172,15 @@ class DatasetWrapper():
 
             # Have to proceed differently if there is only one time.
             if time_begin == time_end:
-                data_holder = data_holder.anomaly.stack(
+                data_holder = data_holder[variable_name].stack(
                             stacked_dim=('latitude', 'longitude'))
             else:
-                data_holder = data_holder.anomaly.stack(
+                data_holder = data_holder[variable_name].stack(
                             stacked_dim=('time', 'latitude', 'longitude'))
 
             unstacked_data = data_holder.copy(data=window_vector.reshape(-1)).unstack('stacked_dim')
-            unstacked_data = unstacked_data.rename({'anomaly': variable_name})
+            # TODO: Not sure if the below is still needed.
+            # unstacked_data = unstacked_data.rename({'anomaly': variable_name})
             return unstacked_data
 
 
@@ -177,15 +205,15 @@ class ZarrDatasetWrapper():
     def longitudes(self):
         return self.unstacked_data_holder.longitude.values
 
-    def get_window_vector(self, time_begin, time_end, member_nr=None, variable='difference'):
+    def get_window_vector(self, time_begin, time_end, member_nr=None, variable_name='difference'):
         time_index_begin = self.get_time_index(time_begin)
         time_index_end = self.get_time_index(time_end)
 
         if member_nr is not None:
-            vector_members = self.dataset_members[variable][member_nr,
+            vector_members = self.dataset_members[variable_name][member_nr,
                 time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
         else: 
-            vector_members = self.dataset_members[variable][:,
+            vector_members = self.dataset_members[variable_name][:,
                 time_index_begin*self.spatial_size:(time_index_end + 1)*self.spatial_size]
         return vector_members
 
